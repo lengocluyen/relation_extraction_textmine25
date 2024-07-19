@@ -110,7 +110,8 @@ class TextToMultiLabelDataGenerator:
     excluded_entity_pairs: List[Tuple[str, str]] = field(default_factory=list)
     first_entity_tag: str = field(default="e1")
     second_entity_tag: str = field(default="e2")
-    text_col: str = field(default="text")
+    entity_type_tagged_text_col: str = field(default="entity_type_tagged_text")
+    entity_role_tagged_text_col: str = field(default="entity_role_tagged_text")
     text_index_col: str = field(default="text_index")
 
     def __post_init__(self):
@@ -351,3 +352,117 @@ class TextToMultiLabelDataGenerator:
             if only_w_relation:
                 generated_df = generated_df[~pd.isnull(generated_df[TARGET_COL])]
             yield generated_df
+
+
+@dataclass
+class TwoSentenceReplacingMentionsMultiLabelDataGenerator(
+    TextToMultiLabelDataGenerator
+):
+
+    def tag_entities(
+        self, text: str, x: Dict[str, Any], y: Dict[str, Any]
+    ) -> pd.DataFrame:
+        """Mark the 2 given entities as the are the argument of a possible ordered
+          relation to generate the 2 possible tagged texts where:
+
+        1. x is the first entity of the relations, and y the second
+        2. y is the first entity of the relations, and x the second
+
+        Args:
+            text (str): the text as stated in the original dataset
+            x (Dict[str, Any]): an entity mentioned in the text as annotated
+              in the original dataset e.g.
+              {
+                "id": 0,
+                "mentions": [
+                    {"value": "accident", "start": 70, "end": 78},
+                    {"value": "accident de circulation", "start": 100, "end": 123}
+                ]
+              }
+            y (Dict[str, Any]): an entity mentioned in the text as annotated
+              in the original dataset; y is different from x.
+
+        Returns:
+            pd.DataFrame: with two columns with respectively the ids of the first and
+              second entities in the marked text, and a last column with the marked text
+              The text column is formated as the Next Sentence prediction task with the
+              - first sentence being the original text in which entity mentions are replaced
+                by their corresponding type
+              - second sentence being the original text in which entity mentions are replaced
+                by their role or position in the relation
+        """
+        logging.debug("starting")
+        start2mentions = {
+            m["start"]: m | {"id": e["id"], "type": e["type"]}
+            for e in [x, y]
+            for m in e["mentions"]
+        }
+        entities_ids = {x["id"], y["id"]}
+        first_entity_id_to_tagged_text = {_id: "" for _id in entities_ids}
+        # order text spans with entity id (None for not entity)
+        id_start_end_pairs = []
+        next_start = 0
+        for start in sorted(list(start2mentions.keys())):
+            e_id = start2mentions[start]["id"]
+            if next_start != start:
+                id_start_end_pairs.append((None, (next_start, start)))
+            next_start = start2mentions[start]["end"]
+            id_start_end_pairs.append((e_id, (start, next_start)))
+        if next_start < len(text):
+            id_start_end_pairs.append((None, (next_start, len(text))))
+        # build the tagged texts
+        for first_e_id in entities_ids:
+            entity_type_tagged_text = ""
+            entity_role_tagged_text = ""
+            for e_id, (start, end) in id_start_end_pairs:
+                entity_span = text[start:end]
+                if e_id is not None:
+                    tag = (
+                        self.first_entity_tag
+                        if e_id == first_e_id
+                        else self.second_entity_tag
+                    )
+                    entity_type = start2mentions[start]["type"]
+                    # entity_type_tagged_text += f"<{entity_type}>"
+                    # entity_role_tagged_text += f"<{tag}>"
+                    entity_type_tagged_text += entity_type
+                    entity_role_tagged_text += tag
+                else:
+                    entity_type_tagged_text += entity_span
+                    entity_role_tagged_text += entity_span
+            first_entity_id_to_tagged_text[first_e_id] = (
+                entity_type_tagged_text,
+                entity_role_tagged_text,
+            )
+        # filter only possible pairs of entity (usually those that exists in the train dataset)
+        rows = []
+        if (x["type"], y["type"]) not in self.excluded_entity_pairs:
+            entity_type_tagged_text, entity_role_tagged_text = (
+                first_entity_id_to_tagged_text[x["id"]]
+            )
+            rows.append(
+                [x["id"], y["id"], entity_type_tagged_text, entity_role_tagged_text]
+            )
+        if (y["type"], x["type"]) not in self.excluded_entity_pairs and x["id"] != y[
+            "id"
+        ]:
+            entity_type_tagged_text, entity_role_tagged_text = (
+                first_entity_id_to_tagged_text[y["id"]]
+            )
+            rows.append(
+                [y["id"], x["id"], entity_type_tagged_text, entity_role_tagged_text]
+            )
+        logging.debug("ending")
+        return (
+            pd.DataFrame(
+                rows,
+                columns=[
+                    self.first_entity_tag,
+                    self.second_entity_tag,
+                    self.entity_type_tagged_text_col,
+                    self.entity_role_tagged_text_col,
+                ],
+            )
+            if len(rows) > 0
+            else pd.DataFrame()
+        )

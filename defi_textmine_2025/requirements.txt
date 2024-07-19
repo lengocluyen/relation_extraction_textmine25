@@ -1,4 +1,5 @@
 accelerate==0.30.0 # because `TypeError: Accelerator.__init__() got an unexpected keyword argument 'use_seedable_sampler'`
+googletrans==3.1.0a0
 kaggle
 tf-keras  # because `Your currently installed version of Keras is Keras 3, but this is not yet supported in Transformers.`
 torch-tb-profiler  # for the Tensorboard plugin of VS Code
