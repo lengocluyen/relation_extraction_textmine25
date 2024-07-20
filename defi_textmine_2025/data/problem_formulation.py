@@ -1,108 +1,10 @@
 from collections.abc import Generator
 from dataclasses import dataclass, field
-import json
 import logging
-import os
 from typing import Any, Dict, List, Tuple
-import re
 
 import pandas as pd
-
-TARGET_COL = "relations"
-INPUT_COLS = ["text", "entities"]
-ID_COL = "id"
-
-CHALLENGE_ID = "defi-text-mine-2025"
-CHALLENGE_DIR = f"data/{CHALLENGE_ID}"
-assert os.path.exists(CHALLENGE_DIR), f"path not found: {CHALLENGE_DIR=}"
-train_raw_data_path = os.path.join(CHALLENGE_DIR, "raw", "train.csv")
-test_raw_data_path = os.path.join(CHALLENGE_DIR, "raw", "test_01-07-2024.csv")
-sample_submission_path = os.path.join(CHALLENGE_DIR, "raw", "sample_submission.csv")
-
-assert os.path.exists(train_raw_data_path)
-assert os.path.exists(test_raw_data_path)
-assert os.path.exists(sample_submission_path)
-
-EDA_DIR = os.path.join(CHALLENGE_DIR, "eda")
-INTERIM_DIR = os.path.join(CHALLENGE_DIR, "interim")
-MODELS_DIR = os.path.join(CHALLENGE_DIR, "models")
-OUTPUT_DIR = os.path.join(CHALLENGE_DIR, "output")
-for dir_path in [EDA_DIR, INTERIM_DIR, MODELS_DIR, OUTPUT_DIR]:
-    if not os.path.exists(dir_path):
-        os.makedirs(dir_path)
-
-submission_path = os.path.join(OUTPUT_DIR, "submission.csv")
-
-
-# def clean_text(text: str) -> str:
-#     RAW_STR_TO_CLEAN_STR = {
-#         "\n": "",
-#         "‘’": '"',
-#         "’’": '"',
-#         "”": '"',
-#         "“": '"',
-#         "’": '"',
-#         " ": " ",
-#     }
-#     for raw_str, clean_str in RAW_STR_TO_CLEAN_STR.items():
-#         text = re.sub(raw_str, clean_str, text)
-#     return text.strip()
-
-
-def load_labeled_raw_data() -> pd.DataFrame:
-    return pd.read_csv(train_raw_data_path, index_col=ID_COL)
-
-
-def load_test_raw_data() -> pd.DataFrame:
-    return pd.read_csv(test_raw_data_path, index_col=ID_COL)
-
-
-def clean_raw_dataset(raw_df: pd.DataFrame) -> pd.DataFrame:
-    return raw_df.assign(
-        **{
-            # don't clean text since it is recommended to give the raw text to BERT-base models
-            # "text": lambda df: df.text.apply(clean_text),
-            "entities": lambda df: df.entities.apply(json.loads),
-            TARGET_COL: lambda df: (
-                df[TARGET_COL].apply(json.loads)
-                if TARGET_COL in df.columns
-                else None  # pd.NA
-            ),
-        }
-    )
-
-
-def print_value_types(data: pd.DataFrame) -> None:
-    for col in data.columns:
-        value = data.iloc[0][col]
-        col_type = type(value)
-        if col_type is list:
-            print(
-                col,
-                "[ ",
-                (
-                    type(value[0])
-                    if type(value[0]) is list
-                    else [type(e) for e in value[0]]
-                ),
-                " ]",
-            )
-        else:
-            print(col, col_type)
-
-
-def save_data(data: pd.DataFrame, csv_path: str, with_index: bool = True) -> None:
-    """save data into a file at file_path
-
-    Args:
-        data (pd.DataFrame): data to save
-        file_path (str): destination file
-        with_index(bool): whether to save the index too
-    """
-    dest_dir_path = os.path.dirname(csv_path)
-    if not os.path.exists(dest_dir_path):
-        os.makedirs(dest_dir_path)
-    data.to_csv(csv_path, index=with_index)
+from defi_textmine_2025.data.utils import TARGET_COL
 
 
 @dataclass
@@ -386,10 +288,10 @@ class TwoSentenceReplacingMentionsMultiLabelDataGenerator(
             pd.DataFrame: with two columns with respectively the ids of the first and
               second entities in the marked text, and a last column with the marked text
               The text column is formated as the Next Sentence prediction task with the
-              - first sentence being the original text in which entity mentions are replaced
-                by their corresponding type
-              - second sentence being the original text in which entity mentions are replaced
-                by their role or position in the relation
+              - first sentence being the original text in which entity mentions are
+                replaced by their corresponding type
+              - second sentence being the original text in which entity mentions are
+                replaced by their role or position in the relation
         """
         logging.debug("starting")
         start2mentions = {
@@ -434,7 +336,8 @@ class TwoSentenceReplacingMentionsMultiLabelDataGenerator(
                 entity_type_tagged_text,
                 entity_role_tagged_text,
             )
-        # filter only possible pairs of entity (usually those that exists in the train dataset)
+        # filter only possible pairs of entity (usually those that exists in the train
+        #  dataset)
         rows = []
         if (x["type"], y["type"]) not in self.excluded_entity_pairs:
             entity_type_tagged_text, entity_role_tagged_text = (
