@@ -15,6 +15,7 @@ class TextToMultiLabelDataGenerator:
     entity_type_tagged_text_col: str = field(default="entity_type_tagged_text")
     entity_role_tagged_text_col: str = field(default="entity_role_tagged_text")
     text_index_col: str = field(default="text_index")
+    text_col: str = field(default="text")
 
     def __post_init__(self):
         logging.info(f"{self.excluded_entity_pairs=}")

@@ -101,3 +101,4 @@ target/
 .vscode
 *.csv
 /mlruns
+.venv
