@@ -47,15 +47,15 @@ class BertBasedModel(nn.Module):
     def __init__(
         self,
         tokenizer: PreTrainedTokenizer,
-        pretrained_model: PreTrainedModel,
+        embedding_model: PreTrainedModel,
         head_model: torch.nn.Sequential,
     ):
         super(BertBasedModel, self).__init__()
-        self.pretrained_model = pretrained_model
+        self.embedding_model = embedding_model
         # if you want to add new tokens to the vocabulary, then in general you’ll need
         # to resize the embedding layers with
         # Source https://discuss.huggingface.co/t/adding-new-tokens-while-preserving-tokenization-of-adjacent-tokens/12604
-        self.pretrained_model.resize_token_embeddings(len(tokenizer))
+        self.embedding_model.resize_token_embeddings(len(tokenizer))
         self.head_model = head_model
 
     def forward(
@@ -64,11 +64,10 @@ class BertBasedModel(nn.Module):
         attn_mask: torch.tensor,
         token_type_ids: torch.tensor,
     ) -> torch.tensor:
-        output = self.pretrained_model(
+        output = self.embedding_model(
             input_ids, attention_mask=attn_mask, token_type_ids=token_type_ids
         )
-        output_dropout = self.dropout(output.pooler_output)
-        output = self.head_model(output_dropout)
+        output = self.head_model(output.pooler_output)
         return output
 
 
@@ -76,12 +75,15 @@ class LinearHeadBertBasedModel(BertBasedModel):
     def __init__(
         self,
         tokenizer: PreTrainedModel,
-        pretrained_model: PreTrainedModel,
+        embedding_model: PreTrainedModel,
+        embedding_size: int,
         n_classes: int,
     ):
-        head_model = nn.Sequential(nn.Dropout(0.3), nn.Linear(768, n_classes))
+        head_model = nn.Sequential(
+            nn.Dropout(0.3), nn.Linear(embedding_size, n_classes)
+        )
         super(LinearHeadBertBasedModel, self).__init__(
-            tokenizer, pretrained_model, head_model
+            tokenizer, embedding_model, head_model
         )
 
 
@@ -107,7 +109,7 @@ class Conv1dHeadBertBasedModel(BertBasedModel):
     def __init__(
         self,
         tokenizer: PreTrainedModel,
-        pretrained_model: PreTrainedModel,
+        embedding_model: PreTrainedModel,
         n_classes: int,
         embedding_size: int,
         frac: int = 2,
@@ -119,7 +121,7 @@ class Conv1dHeadBertBasedModel(BertBasedModel):
 
         Args:
             tokenizer (PreTrainedModel): _description_
-            pretrained_model (PreTrainedModel): _description_
+            embedding_model (PreTrainedModel): _description_
             n_classes (int): _description_
             embedding_size (int): _description_
             frac (int, optional): _description_. Defaults to 2.
@@ -141,7 +143,7 @@ class Conv1dHeadBertBasedModel(BertBasedModel):
             nn.Linear(embedding_size // frac, n_classes),
         )
         super(Conv1dHeadBertBasedModel, self).__init__(
-            tokenizer, pretrained_model, head_model
+            tokenizer, embedding_model, head_model
         )
 
 
