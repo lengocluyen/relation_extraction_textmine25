@@ -80,7 +80,7 @@ class LinearHeadBertBasedModel(BertBasedModel):
         n_classes: int,
     ):
         head_model = nn.Sequential(
-            nn.Dropout(0.3), nn.Linear(embedding_size, n_classes)
+            nn.Dropout(0.1), nn.Linear(embedding_size, n_classes)
         )
         super(LinearHeadBertBasedModel, self).__init__(
             tokenizer, embedding_model, head_model

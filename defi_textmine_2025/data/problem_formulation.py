@@ -4,6 +4,8 @@ import logging
 from typing import Any, Dict, List, Tuple
 
 import pandas as pd
+import nltk
+
 from defi_textmine_2025.data.utils import TARGET_COL
 
 
@@ -15,10 +17,45 @@ class TextToMultiLabelDataGenerator:
     entity_type_tagged_text_col: str = field(default="entity_type_tagged_text")
     entity_role_tagged_text_col: str = field(default="entity_role_tagged_text")
     text_index_col: str = field(default="text_index")
+    text_col: str = field(default="text")
+    do_remove_sentence_without_entities: bool = field(default=False)
 
     def __post_init__(self):
         logging.info(f"{self.excluded_entity_pairs=}")
         assert self.first_entity_tag != self.second_entity_tag
+
+    def remove_sentence_without_entities_if_possible(
+        self, tagged_text: str, e1_type: str, e2_type: str
+    ) -> str:
+        """remove the sentences that don't mention the entity types e1_type and e2_type:
+        1. attempt 1: keep and concat only sentences with simultaneously both entity
+          type
+        2. attempt 2: if none found in attempt 1, keep and concat only sentences with
+          either entity type
+
+        Args:
+            tagged_text (str): a text with tagged entity types and role
+            e1_type (str): type of entity 1
+            e2_type (str): type of entity 2. Might be identical to e1_type (e.g.
+                for one-entity relations)
+
+        Returns:
+            str: the clean tagged text
+        """
+        kept_sentences = []
+        sentences = nltk.sent_tokenize(tagged_text)  # this gives us a list of sentences
+        # attempt 1: keep and concat only sentences with simultaneously both entity type
+        for s in sentences:
+            if e1_type in s and e2_type in s:
+                kept_sentences.append(s)
+        if len(kept_sentences) == 0:
+            # attempt 2: if none found in attempt 1, keep and concat only sentences
+            #   with either entity type
+            for s in sentences:
+                if e1_type in s or e2_type in s:
+                    kept_sentences.append(s)
+        # concatenate selected sentences
+        return " ".join(kept_sentences)
 
     def tag_entities(
         self, text: str, x: Dict[str, Any], y: Dict[str, Any]
@@ -67,6 +104,7 @@ class TextToMultiLabelDataGenerator:
         if next_start < len(text):
             id_start_end_pairs.append((None, (next_start, len(text))))
         # build the tagged texts
+        entity_types = []
         for first_e_id in entities_ids:
             tagged_text = ""
             for e_id, (start, end) in id_start_end_pairs:
@@ -81,8 +119,13 @@ class TextToMultiLabelDataGenerator:
                     tagged_text += "<{}><{}>{}</{}>".format(
                         tag, entity_type, entity_span, tag
                     )
+                    entity_types.append(entity_type)
                 else:
                     tagged_text += entity_span
+            if self.do_remove_sentence_without_entities:
+                tagged_text = self.remove_sentence_without_entities_if_possible(
+                    tagged_text, entity_types[0], entity_types[-1]
+                )
             first_entity_id_to_tagged_text[first_e_id] = tagged_text
         # filter only possible
         rows = []
