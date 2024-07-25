@@ -1,4 +1,3 @@
-from collections import OrderedDict
 import tqdm.notebook as tq
 from tqdm import tqdm
 import torch
@@ -77,32 +76,18 @@ class LinearHeadBertBasedModel(BertBasedModel):
         tokenizer: PreTrainedModel,
         embedding_model: PreTrainedModel,
         embedding_size: int,
+        hidden_dim: int,
         n_classes: int,
     ):
         head_model = nn.Sequential(
-            nn.Dropout(0.1), nn.Linear(embedding_size, n_classes)
+            nn.Linear(embedding_size, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_dim, n_classes),
         )
         super(LinearHeadBertBasedModel, self).__init__(
             tokenizer, embedding_model, head_model
         )
-
-
-class Transpose(nn.Module):
-
-    def __init__(self):
-        super(Transpose, self).__init__()
-
-    def forward(self, tensor):
-        return tensor.transpose(1, 2)
-
-
-class Squeeze(nn.Module):
-
-    def __init__(self):
-        super(Squeeze, self).__init__()
-
-    def forward(self, tensor):
-        return tensor.squeeze()
 
 
 class Conv1dHeadBertBasedModel(BertBasedModel):
@@ -112,8 +97,8 @@ class Conv1dHeadBertBasedModel(BertBasedModel):
         embedding_model: PreTrainedModel,
         n_classes: int,
         embedding_size: int,
-        frac: int = 2,
         kernel: int = 5,
+        stride: int = 1,
     ):
         """Sources:
         - https://gist.github.com/cjmcmurtrie/bcf2bce22715545559f52c28716813f2
@@ -128,19 +113,18 @@ class Conv1dHeadBertBasedModel(BertBasedModel):
             kernel (int, optional): _description_. Defaults to 5.
         """
         head_model = nn.Sequential(
-            Transpose(),
-            nn.Conv1d(embedding_size, embedding_size // frac, kernel, padding="valid"),
-            nn.ReLU(),
-            nn.AvgPool1d(kernel_size=2),
             nn.Conv1d(
-                embedding_size // frac, embedding_size // frac, kernel, padding="valid"
+                in_channels=embedding_size * 4,
+                out_channels=256,
+                kernel_size=kernel,
+                stride=stride,
             ),
             nn.ReLU(),
-            nn.AvgPool1d(kernel_size=2),
-            nn.Conv1d(embedding_size // frac, embedding_size // frac, 27),
-            nn.ReLU(),
-            Squeeze(),
-            nn.Linear(embedding_size // frac, n_classes),
+            nn.MaxPool1d(kernel_size=64 - 5 + 1),
+            nn.Dropout(0.3),
+            nn.Flatten(),
+            nn.Linear(256, 256),
+            nn.Linear(256, n_classes),
         )
         super(Conv1dHeadBertBasedModel, self).__init__(
             tokenizer, embedding_model, head_model
