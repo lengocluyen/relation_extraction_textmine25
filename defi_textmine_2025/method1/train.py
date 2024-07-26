@@ -277,7 +277,7 @@ EPOCHS = 30
 PATIENCE = 5
 n_not_better_steps = 0
 history = defaultdict(list)
-best_f1_macro = 0
+best_val_loss = 10000
 
 for epoch in range(1, EPOCHS + 1):
     logging.info(f"Epoch {epoch}/{EPOCHS}")
@@ -298,30 +298,32 @@ for epoch in range(1, EPOCHS + 1):
     history["val_acc"].append(val_acc)
     history["val_f1_macro"].append(val_f1_macro)
     history["val_loss"].append(val_loss)
+
+    logging.info(f"Recall {log_file_path=}")
+
+    learning_curve_fig_path = os.path.join(METHOD_INTERIM_DIR, "learning_curve.png")
+    logging.info(f"## Plotting the learning curve @ {learning_curve_fig_path} ...")
+    plt.rcParams["figure.figsize"] = (10, 7)
+    plt.plot(history["train_f1_macro"], label="train F1 macro")
+    plt.plot(history["val_f1_macro"], label="validation F1 macro")
+    plt.plot(history["train_loss"], label="train loss")
+    plt.plot(history["val_loss"], label="validation loss")
+    plt.title("Training history")
+    plt.ylabel("F1 macro / loss")
+    plt.xlabel("Epoch")
+    plt.legend()
+    plt.ylim([0, 1])
+    plt.grid()
+    plt.savefig(learning_curve_fig_path)
     # save the best model
-    if val_f1_macro > best_f1_macro:
-        logging.info(f"Saving improved model state @ {model_dict_state_path}")
+    if val_loss < best_val_loss:
+        logging.info(
+            f"Saving improved model state with {val_loss=} < {best_val_loss=} @ {model_dict_state_path}"
+        )
         torch.save(model.state_dict(), model_dict_state_path)
-        best_f1_macro = val_f1_macro
+        best_val_loss = val_loss
         n_not_better_steps = 0
     else:  # check for early stopping
         n_not_better_steps += 1
         if n_not_better_steps >= PATIENCE:
             break
-
-logging.info(f"Recall {log_file_path=}")
-
-learning_curve_fig_path = os.path.join(METHOD_INTERIM_DIR, "learning_curve.png")
-logging.info(f"## Plotting the learning curve @ {learning_curve_fig_path} ...")
-plt.rcParams["figure.figsize"] = (10, 7)
-plt.plot(history["train_f1_macro"], label="train F1 macro")
-plt.plot(history["val_f1_macro"], label="validation F1 macro")
-plt.plot(history["train_loss"], label="train loss")
-plt.plot(history["val_loss"], label="validation loss")
-plt.title("Training history")
-plt.ylabel("F1 macro / loss")
-plt.xlabel("Epoch")
-plt.legend()
-plt.ylim([0, 1])
-plt.grid()
-plt.savefig(learning_curve_fig_path)
