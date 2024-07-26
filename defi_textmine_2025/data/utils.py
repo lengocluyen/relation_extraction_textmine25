@@ -20,9 +20,10 @@ assert os.path.exists(sample_submission_path)
 
 EDA_DIR = os.path.join(CHALLENGE_DIR, "eda")
 INTERIM_DIR = os.path.join(CHALLENGE_DIR, "interim")
+LOGGING_DIR = os.path.join(CHALLENGE_DIR, "logs")
 MODELS_DIR = os.path.join(CHALLENGE_DIR, "models")
 OUTPUT_DIR = os.path.join(CHALLENGE_DIR, "output")
-for dir_path in [EDA_DIR, INTERIM_DIR, MODELS_DIR, OUTPUT_DIR]:
+for dir_path in [EDA_DIR, INTERIM_DIR, LOGGING_DIR, MODELS_DIR, OUTPUT_DIR]:
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
 
@@ -143,3 +144,20 @@ def convert_text_to_entity_spans(
     if next_start < len(text):
         span_and_entity_id_pairs.append((text[next_start:], None))
     return span_and_entity_id_pairs
+
+
+def get_cat_var_distribution(cat_var: pd.Series) -> pd.DataFrame:
+    return pd.concat(
+        [cat_var.value_counts(), cat_var.value_counts(normalize=True)], axis=1
+    )
+
+
+def compute_class_weights(df: pd.DataFrame, class_names: list) -> pd.Series:
+    n_examples = df.shape[0]
+    n_classes = len(class_names)
+    return (
+        df[class_names]
+        .sum(axis=0)
+        .map(lambda x: (1 / x) * (n_examples / n_classes))
+        .rename("weight")
+    )

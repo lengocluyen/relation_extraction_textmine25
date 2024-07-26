@@ -1,7 +1,10 @@
-import tqdm.notebook as tq
+import numpy as np
 from tqdm import tqdm
+
 import torch
-import torch.nn as nn
+from torch import nn
+from sklearn.metrics import f1_score
+
 from transformers import (
     PreTrainedModel,
     PreTrainedTokenizer,
@@ -81,14 +84,15 @@ class LinearHeadBertBasedModel(BertBasedModel):
     ):
         head_model = (
             nn.Sequential(
+                nn.Dropout(0.3),
                 nn.Linear(embedding_size, hidden_dim),
                 nn.ReLU(),
-                nn.Dropout(0.1),
+                nn.Dropout(0.3),
                 nn.Linear(hidden_dim, n_classes),
             )
             if hidden_dim > 0
             else nn.Sequential(
-                nn.Dropout(0.1),
+                nn.Dropout(0.3),
                 nn.Linear(embedding_size, n_classes),
             )
         )
@@ -159,7 +163,7 @@ def loss_fn(
 
 
 # Training of the model for one epoch
-def train_model(training_loader, model, optimizer):
+def train_model(model, training_loader, optimizer, _class_weights_tensor, device):
     predictions = []
     prediction_probs = []
     target_values = []
@@ -169,8 +173,9 @@ def train_model(training_loader, model, optimizer):
     # set model to training mode (activate dropout, batch norm)
     model.train()
     # initialize the progress bar
-    loop = tq.tqdm(
+    loop = tqdm(
         enumerate(training_loader),
+        desc="Training",
         total=len(training_loader),
         leave=True,
         colour="steelblue",
@@ -183,7 +188,7 @@ def train_model(training_loader, model, optimizer):
 
         # forward
         outputs = model(ids, mask, token_type_ids)  # (batch,predict)=(32,37)
-        loss = loss_fn(outputs, targets)
+        loss = loss_fn(outputs, targets, _class_weights_tensor)
         losses.append(loss.item())
         # training accuracy, apply sigmoid, round (apply thresh 0.5)
         # outputs = torch.sigmoid(outputs).cpu().detach().numpy().round()
@@ -210,8 +215,8 @@ def train_model(training_loader, model, optimizer):
         # grad descent step
         optimizer.step()
         # Update progress bar
-        # loop.set_description(f"")
-        # loop.set_postfix(batch_loss=loss)
+        loop.set_description("")
+        loop.set_postfix(batch_loss=loss.cpu().detach().numpy())
 
     # returning: trained model, model accuracy, mean loss
     predictions = torch.stack(predictions)
@@ -224,49 +229,9 @@ def train_model(training_loader, model, optimizer):
         f1_score(target_values, predictions, average="macro", zero_division=0),
         np.mean(losses),
     )
-    # return model, float(correct_predictions)/num_samples, np.mean(losses)
 
 
-def get_predictions(model, data_loader):
-    """
-    Outputs:
-      predictions -
-    """
-    model = model.eval()
-
-    titles = []
-    predictions = []
-    prediction_probs = []
-    target_values = []
-
-    with torch.no_grad():
-        for data in tqdm(data_loader, "training"):
-            title = data["title"]
-            ids = data["input_ids"].to(device, dtype=torch.long)
-            mask = data["attention_mask"].to(device, dtype=torch.long)
-            token_type_ids = data["token_type_ids"].to(device, dtype=torch.long)
-            targets = data["targets"].to(device, dtype=torch.float)
-
-            outputs = model(ids, mask, token_type_ids)
-            # add sigmoid, for the training sigmoid is in BCEWithLogitsLoss
-            outputs = torch.sigmoid(outputs).detach().cpu()
-            # thresholding at 0.5
-            preds = outputs.round()
-            targets = targets.detach().cpu()
-
-            titles.extend(title)
-            predictions.extend(preds)
-            prediction_probs.extend(outputs)
-            target_values.extend(targets)
-
-    predictions = torch.stack(predictions)
-    prediction_probs = torch.stack(prediction_probs)
-    target_values = torch.stack(target_values)
-
-    return titles, predictions, prediction_probs, target_values
-
-
-def eval_model(model: LinearHeadBertBasedModel, validation_loader, device):
+def eval_model(model, validation_loader, _class_weights_tensor, device):
     predictions = []
     prediction_probs = []
     target_values = []
@@ -278,14 +243,14 @@ def eval_model(model: LinearHeadBertBasedModel, validation_loader, device):
 
     with torch.no_grad():
         # for batch_idx, data in tqdm(enumerate(validation_loader, 0), "evaluating"):
-        for data in tqdm(validation_loader, "evaluating"):
+        for data in tqdm(validation_loader, "Evaluation"):
             ids = data["input_ids"].to(device, dtype=torch.long)
             mask = data["attention_mask"].to(device, dtype=torch.long)
             token_type_ids = data["token_type_ids"].to(device, dtype=torch.long)
             targets = data["targets"].to(device, dtype=torch.float)
             outputs = model(ids, mask, token_type_ids)
 
-            loss = loss_fn(outputs, targets)
+            loss = loss_fn(outputs, targets, _class_weights_tensor)
             losses.append(loss.item())
 
             # validation accuracy
@@ -312,3 +277,42 @@ def eval_model(model: LinearHeadBertBasedModel, validation_loader, device):
         f1_score(target_values, predictions, average="macro", zero_division=0),
         np.mean(losses),
     )
+
+
+def get_predictions(model, data_loader, device):
+    """
+    Outputs:
+      predictions -
+    """
+    model = model.eval()
+
+    titles = []
+    predictions = []
+    prediction_probs = []
+    target_values = []
+
+    with torch.no_grad():
+        for data in tqdm(data_loader, "Prediction"):
+            title = data["title"]
+            ids = data["input_ids"].to(device, dtype=torch.long)
+            mask = data["attention_mask"].to(device, dtype=torch.long)
+            token_type_ids = data["token_type_ids"].to(device, dtype=torch.long)
+            targets = data["targets"].to(device, dtype=torch.float)
+
+            outputs = model(ids, mask, token_type_ids)
+            # add sigmoid, for the training sigmoid is in BCEWithLogitsLoss
+            outputs = torch.sigmoid(outputs).detach().cpu()
+            # thresholding at 0.5
+            preds = outputs.round()
+            targets = targets.detach().cpu()
+
+            titles.extend(title)
+            predictions.extend(preds)
+            prediction_probs.extend(outputs)
+            target_values.extend(targets)
+
+    predictions = torch.stack(predictions)
+    prediction_probs = torch.stack(prediction_probs)
+    target_values = torch.stack(target_values)
+
+    return titles, predictions, prediction_probs, target_values
