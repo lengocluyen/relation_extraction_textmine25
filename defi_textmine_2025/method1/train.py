@@ -1,3 +1,7 @@
+"""
+python -m defi_textmine_2025.method1.train
+"""
+
 import os
 from datetime import datetime
 import pandas as pd
@@ -6,7 +10,6 @@ from defi_textmine_2025.data.utils import (
     LOGGING_DIR,
     INTERIM_DIR,
     MODELS_DIR,
-    get_cat_var_distribution,
     compute_class_weights,
 )
 import logging
@@ -47,7 +50,7 @@ from defi_textmine_2025.bert_dataset_and_models import (
 PRETRAINED_EMBEDDING_CHECKPOINT = "camembert/camembert-base"
 EMBEDDING_SIZE = 768  # 768 # 1024
 TASK_NAME = "multilabel_tagged_text"
-TRAIN_BATCH_SIZE = 16
+TRAIN_BATCH_SIZE = 32
 VALID_BATCH_SIZE = 32
 
 entity_classes = {
@@ -268,6 +271,8 @@ if os.path.exists(
 elif not os.path.exists(os.path.dirname(model_dict_state_path)):
     os.makedirs(os.path.dirname(model_dict_state_path))
 
+logging.info(f"Recall {log_file_path=}")
+
 EPOCHS = 30
 PATIENCE = 5
 n_not_better_steps = 0
@@ -275,7 +280,7 @@ history = defaultdict(list)
 best_f1_macro = 0
 
 for epoch in range(1, EPOCHS + 1):
-    print(f"Epoch {epoch}/{EPOCHS}")
+    logging.info(f"Epoch {epoch}/{EPOCHS}")
     model, train_acc, train_f1_macro, train_loss = train_model(
         model, train_data_loader, optimizer, class_weights_tensor, device
     )
@@ -283,7 +288,7 @@ for epoch in range(1, EPOCHS + 1):
         model, val_data_loader, class_weights_tensor, device
     )
 
-    print(
+    logging.info(
         f"train_loss={train_loss:.4f}, val_loss={val_loss:.4f} train_f1_macro={train_f1_macro:.4f}, val_f1_macro={val_f1_macro:.4f}"
     )
 
@@ -303,6 +308,8 @@ for epoch in range(1, EPOCHS + 1):
         n_not_better_steps += 1
         if n_not_better_steps >= PATIENCE:
             break
+
+logging.info(f"Recall {log_file_path=}")
 
 learning_curve_fig_path = os.path.join(METHOD_INTERIM_DIR, "learning_curve.png")
 logging.info(f"## Plotting the learning curve @ {learning_curve_fig_path} ...")

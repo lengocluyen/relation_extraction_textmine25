@@ -178,7 +178,7 @@ def train_model(model, training_loader, optimizer, _class_weights_tensor, device
         desc="Training",
         total=len(training_loader),
         leave=True,
-        colour="steelblue",
+        # colour="steelblue",
     )
     for batch_idx, data in loop:
         ids = data["input_ids"].to(device, dtype=torch.long)
