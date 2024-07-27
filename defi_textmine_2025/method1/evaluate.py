@@ -196,11 +196,11 @@ logging.info(next(iter(train_dataset)))
 
 logging.info("## Create train and validation data loaders...")
 train_data_loader = torch.utils.data.DataLoader(
-    train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0
+    train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=22
 )
 
 val_data_loader = torch.utils.data.DataLoader(
-    valid_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0
+    valid_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=22
 )
 
 logging.info("## Init the model and Load its state ...")

@@ -50,7 +50,7 @@ from defi_textmine_2025.bert_dataset_and_models import (
 PRETRAINED_EMBEDDING_CHECKPOINT = "camembert/camembert-base"
 EMBEDDING_SIZE = 768  # 768 # 1024
 TASK_NAME = "multilabel_tagged_text"
-TRAIN_BATCH_SIZE = 32
+TRAIN_BATCH_SIZE = 16
 VALID_BATCH_SIZE = 32
 
 entity_classes = {
@@ -168,7 +168,7 @@ logging.info(f"{device=}")
 
 logging.info("## Loading data ...")
 METHOD_INTERIM_DIR = os.path.join(INTERIM_DIR, "method1")
-train_csv_path = os.path.join(METHOD_INTERIM_DIR, "oversampled_train.csv")
+train_csv_path = os.path.join(METHOD_INTERIM_DIR, "augmented_train.csv")
 valid_csv_path = os.path.join(METHOD_INTERIM_DIR, "validation_onehot.csv")
 assert os.path.exists(train_csv_path), f"Unfound {train_csv_path=}"
 assert os.path.exists(valid_csv_path), f"Unfound {valid_csv_path=}"
@@ -181,7 +181,7 @@ logging.info(f"{train_df.shape=}, {valid_df.shape=}")
 
 logging.info("## Create the tokenized datasets for model input with special tokens...")
 # Hyperparameters
-MAX_LEN = 300  # TODO: increase
+MAX_LEN = 300
 # tokenizer = BertTokenizer.from_pretrained(BASE_CHECKPOINT)
 tokenizer = CamembertTokenizer.from_pretrained(PRETRAINED_EMBEDDING_CHECKPOINT)
 task_special_tokens = ["<e1>", "</e1>", "<e2>", "</e2>"] + [
@@ -216,11 +216,11 @@ logging.info(next(iter(train_dataset)))
 
 logging.info("## Create train and validation data loaders...")
 train_data_loader = torch.utils.data.DataLoader(
-    train_dataset, batch_size=TRAIN_BATCH_SIZE, shuffle=True, num_workers=0
+    train_dataset, batch_size=TRAIN_BATCH_SIZE, shuffle=True, num_workers=22
 )
 
 val_data_loader = torch.utils.data.DataLoader(
-    valid_dataset, batch_size=VALID_BATCH_SIZE, shuffle=False, num_workers=0
+    valid_dataset, batch_size=VALID_BATCH_SIZE, shuffle=False, num_workers=22
 )
 
 logging.info("## Compute class weights to handle imbalance into the loss function...")
