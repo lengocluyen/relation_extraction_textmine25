@@ -45,6 +45,62 @@ class CustomDataset(torch.utils.data.Dataset):
         }
 
 
+class FlaubertBasedModel(nn.Module):
+    def __init__(
+        self,
+        tokenizer: PreTrainedTokenizer,
+        embedding_model: PreTrainedModel,
+        head_model: torch.nn.Sequential,
+    ):
+        super(FlaubertBasedModel, self).__init__()
+        self.embedding_model = embedding_model
+        # if you want to add new tokens to the vocabulary, then in general you’ll need
+        # to resize the embedding layers with
+        # Source https://discuss.huggingface.co/t/adding-new-tokens-while-preserving-tokenization-of-adjacent-tokens/12604
+        self.embedding_model.resize_token_embeddings(len(tokenizer))
+        self.head_model = head_model
+
+    def forward(
+        self,
+        input_ids: torch.tensor,
+        attn_mask: torch.tensor,
+        token_type_ids: torch.tensor,
+    ) -> torch.tensor:
+        last_layer = self.embedding_model(input_ids)[0]
+        # The BERT [CLS] token correspond to the first hidden state of the last layer
+        cls_embedding = last_layer[:, 0, :]
+        output = self.head_model(cls_embedding)
+        return output
+
+
+class LinearHeadFlaubertBasedModel(FlaubertBasedModel):
+    def __init__(
+        self,
+        tokenizer: PreTrainedModel,
+        embedding_model: PreTrainedModel,
+        embedding_size: int,
+        hidden_dim: int,
+        n_classes: int,
+    ):
+        head_model = (
+            nn.Sequential(
+                nn.Dropout(0.3),
+                nn.Linear(embedding_size, hidden_dim),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.Linear(hidden_dim, n_classes),
+            )
+            if hidden_dim > 0
+            else nn.Sequential(
+                nn.Dropout(0.3),
+                nn.Linear(embedding_size, n_classes),
+            )
+        )
+        super(LinearHeadFlaubertBasedModel, self).__init__(
+            tokenizer, embedding_model, head_model
+        )
+
+
 class BertBasedModel(nn.Module):
     def __init__(
         self,
