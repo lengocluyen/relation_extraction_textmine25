@@ -290,7 +290,7 @@ class TextToMultiLabelDataGenerator:
         )
 
     def generate_row_multilabel_data(
-        self, clean_df: pd.DataFrame, only_w_relation: bool = True
+        self, clean_df: pd.DataFrame, only_w_relation: bool
     ) -> Generator[pd.DataFrame]:
         """yields a dataframe per text with all the generated data
 
@@ -316,9 +316,7 @@ class TextToMultiLabelDataGenerator:
 
 
 @dataclass
-class TwoSentenceReplacingMentionsMultiLabelDataGenerator(
-    TextToMultiLabelDataGenerator
-):
+class Mention2TypeDataGenerator(TextToMultiLabelDataGenerator):
 
     def tag_entities(
         self, text: str, x: Dict[str, Any], y: Dict[str, Any]
@@ -346,11 +344,6 @@ class TwoSentenceReplacingMentionsMultiLabelDataGenerator(
         Returns:
             pd.DataFrame: with two columns with respectively the ids of the first and
               second entities in the marked text, and a last column with the marked text
-              The text column is formated as the Next Sentence prediction task with the
-              - first sentence being the original text in which entity mentions are
-                replaced by their corresponding type
-              - second sentence being the original text in which entity mentions are
-                replaced by their role or position in the relation
         """
         logging.debug("starting")
         start2mentions = {
@@ -372,9 +365,9 @@ class TwoSentenceReplacingMentionsMultiLabelDataGenerator(
         if next_start < len(text):
             id_start_end_pairs.append((None, (next_start, len(text))))
         # build the tagged texts
+        entity_types = []
         for first_e_id in entities_ids:
-            entity_type_tagged_text = ""
-            entity_role_tagged_text = ""
+            tagged_text = ""
             for e_id, (start, end) in id_start_end_pairs:
                 entity_span = text[start:end]
                 if e_id is not None:
@@ -384,36 +377,19 @@ class TwoSentenceReplacingMentionsMultiLabelDataGenerator(
                         else self.second_entity_tag
                     )
                     entity_type = start2mentions[start]["type"]
-                    # entity_type_tagged_text += f"<{entity_type}>"
-                    # entity_role_tagged_text += f"<{tag}>"
-                    entity_type_tagged_text += entity_type
-                    entity_role_tagged_text += tag
+                    tagged_text += "<{}_{}>".format(entity_type, tag)
+                    entity_types.append(entity_type)
                 else:
-                    entity_type_tagged_text += entity_span
-                    entity_role_tagged_text += entity_span
-            first_entity_id_to_tagged_text[first_e_id] = (
-                entity_type_tagged_text,
-                entity_role_tagged_text,
-            )
-        # filter only possible pairs of entity (usually those that exists in the train
-        #  dataset)
+                    tagged_text += entity_span
+            first_entity_id_to_tagged_text[first_e_id] = tagged_text
+        # filter only possible
         rows = []
         if (x["type"], y["type"]) not in self.excluded_entity_pairs:
-            entity_type_tagged_text, entity_role_tagged_text = (
-                first_entity_id_to_tagged_text[x["id"]]
-            )
-            rows.append(
-                [x["id"], y["id"], entity_type_tagged_text, entity_role_tagged_text]
-            )
+            rows.append([x["id"], y["id"], first_entity_id_to_tagged_text[x["id"]]])
         if (y["type"], x["type"]) not in self.excluded_entity_pairs and x["id"] != y[
             "id"
         ]:
-            entity_type_tagged_text, entity_role_tagged_text = (
-                first_entity_id_to_tagged_text[y["id"]]
-            )
-            rows.append(
-                [y["id"], x["id"], entity_type_tagged_text, entity_role_tagged_text]
-            )
+            rows.append([y["id"], x["id"], first_entity_id_to_tagged_text[y["id"]]])
         logging.debug("ending")
         return (
             pd.DataFrame(
@@ -421,8 +397,7 @@ class TwoSentenceReplacingMentionsMultiLabelDataGenerator(
                 columns=[
                     self.first_entity_tag,
                     self.second_entity_tag,
-                    self.entity_type_tagged_text_col,
-                    self.entity_role_tagged_text_col,
+                    self.text_col,
                 ],
             )
             if len(rows) > 0
