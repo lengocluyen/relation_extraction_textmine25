@@ -198,6 +198,82 @@ class Conv1dHeadBertBasedModel(BertBasedModel):
         )
 
 
+class TransformerAttentionBertModel(nn.Module):
+    def __init__(
+        self,
+        tokenizer: PreTrainedTokenizer,
+        embedding_model: PreTrainedModel,
+        n_classes: int,
+        num_transformer_layers: int = 2,
+        num_attention_heads: int = 8,
+        dropout_rate: float = 0.1,
+    ):
+        super(TransformerAttentionBertModel, self).__init__()
+        self.embedding_model = embedding_model
+        self.embedding_model.resize_token_embeddings(len(tokenizer))
+        self.embedding_size = embedding_model.config.hidden_size
+
+        # Transformer Encoder Layer
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=self.embedding_size,
+            nhead=num_attention_heads,
+            dropout=dropout_rate,
+            activation="relu",
+        )
+        self.transformer_encoder = nn.TransformerEncoder(
+            encoder_layer,
+            num_layers=num_transformer_layers,
+        )
+
+        # Classification Head
+        self.classification_head = nn.Sequential(
+            nn.Linear(self.embedding_size, n_classes),
+        )
+
+    def forward(
+        self,
+        input_ids: torch.tensor,
+        attn_mask: torch.tensor,
+        token_type_ids: torch.tensor = None,
+    ):
+        # Obtain embeddings from the pre-trained model
+        outputs = self.embedding_model(
+            input_ids=input_ids,
+            attention_mask=attn_mask,
+            token_type_ids=token_type_ids,
+        )
+        hidden_states = (
+            outputs.last_hidden_state
+        )  # Shape: [batch_size, seq_len, hidden_size]
+
+        # Transpose for Transformer encoder (required shape: [seq_len, batch_size, hidden_size])
+        hidden_states = hidden_states.permute(1, 0, 2)
+
+        # Create a source mask based on attention mask
+        src_key_padding_mask = attn_mask == 0  # Shape: [batch_size, seq_len]
+
+        # Pass through Transformer encoder
+        transformer_output = self.transformer_encoder(
+            hidden_states,
+            src_key_padding_mask=src_key_padding_mask,
+        )  # Shape: [seq_len, batch_size, hidden_size]
+
+        # Take the mean of the encoder outputs
+        transformer_output = transformer_output.permute(
+            1, 0, 2
+        )  # Shape: [batch_size, seq_len, hidden_size]
+        pooled_output = torch.mean(
+            transformer_output, dim=1
+        )  # Shape: [batch_size, hidden_size]
+
+        # Pass through classification head
+        logits = self.classification_head(
+            pooled_output
+        )  # Shape: [batch_size, n_classes]
+
+        return logits
+
+
 def loss_fn(
     outputs: torch.Tensor, targets: torch.Tensor, class_weights: torch.Tensor
 ) -> float:

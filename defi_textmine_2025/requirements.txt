@@ -4,6 +4,7 @@ ipywidgets  # for IProgress and progress bar in notebooks
 jupyter
 jupyter_contrib_nbextensions # for IProgress and progress bar in notebooks
 kaggle
+mlcm  # confusion matrix
 sacremoses  # needed by flauBERT
 textattack
 textaugment  # After import nltk; nltk.download('punkt'); nltk.download('wordnet')
