@@ -489,7 +489,7 @@ class EntityBracketTaggingDataGenerator(TextToMultiLabelDataGenerator):
         # build the tagged texts
         entity_types = []
         for first_e_id in entities_ids:
-            tagged_text = ""
+            tagged_text: str = ""
             for e_id, (start, end) in id_start_end_pairs:
                 text_span = text[start:end]
                 open_tag = None
@@ -510,6 +510,13 @@ class EntityBracketTaggingDataGenerator(TextToMultiLabelDataGenerator):
                     entity_types.append(entity_type)
                 else:  # non-entity text span
                     tagged_text += text_span
+            # it might happen that even if the ids are different (x["id"] != y["id"])
+            # but they have the same mention  in that case, this seems like an unary
+            # relation and should be tagged as such. So we should change its tags
+            if x["id"] != y["id"] and self.e2_open_tag not in tagged_text:
+                tagged_text = tagged_text.replace(
+                    self.e1_open_tag, self.single_entity_open_tag
+                ).replace(self.e1_close_tag, self.single_entity_close_tag)
             first_entity_id_to_tagged_text[first_e_id] = tagged_text
         return self.convert_first_entity_id_to_tagged_text_dict2dataframe(
             first_entity_id_to_tagged_text, x, y

@@ -5,7 +5,9 @@ jupyter
 jupyter_contrib_nbextensions # for IProgress and progress bar in notebooks
 kaggle
 mlcm  # confusion matrix
+optimum[onnxruntime-gpu]  # to further compress SetFit models for faster inference & deployment on GPU using Optimum Onnx
 sacremoses  # needed by flauBERT
+setfit  # SetFit is an efficient and prompt-free framework for few-shot fine-tuning of Sentence Transformers.
 stanza  # to split texts into sentences: AFTER python -c 'import stanza; stanza.download("fr")'
 textattack
 textaugment  # After import nltk; nltk.download('punkt'); nltk.download('wordnet')

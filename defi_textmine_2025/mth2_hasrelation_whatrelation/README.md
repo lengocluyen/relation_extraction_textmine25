@@ -84,3 +84,9 @@ example format: `[text_index]: [text extract with tagged entities]`
 ## Spelling errors
 
 - 3787: _... à Londres. **Malrgé** la pluie ..._
+
+## two entities having the same mention
+
+````
+51698: ... que le { propriétaire } de la boutique...
+````
