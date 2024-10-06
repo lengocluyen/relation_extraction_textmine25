@@ -6,6 +6,7 @@ jupyter_contrib_nbextensions # for IProgress and progress bar in notebooks
 kaggle
 mlcm  # confusion matrix
 sacremoses  # needed by flauBERT
+stanza  # to split texts into sentences: AFTER python -c 'import stanza; stanza.download("fr")'
 textattack
 textaugment  # After import nltk; nltk.download('punkt'); nltk.download('wordnet')
 textblob==0.17.1

@@ -1,7 +1,7 @@
 from collections.abc import Generator
 from dataclasses import dataclass, field
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 import pandas as pd
 import nltk
@@ -11,7 +11,10 @@ from defi_textmine_2025.data.utils import TARGET_COL
 
 @dataclass
 class TextToMultiLabelDataGenerator:
-    excluded_entity_pairs: List[Tuple[str, str]] = field(default_factory=list)
+    allowed_binary_relation_entity_type_pairs: Set[Tuple[str, str]] = field(
+        default_factory=set
+    )
+    allowed_unary_relation_entity_types: Set[str] = field(default_factory=set)
     first_entity_tag: str = field(default="e1")
     second_entity_tag: str = field(default="e2")
     entity_type_tagged_text_col: str = field(default="entity_type_tagged_text")
@@ -20,7 +23,8 @@ class TextToMultiLabelDataGenerator:
     text_col: str = field(default="text")
 
     def __post_init__(self):
-        logging.info(f"{self.excluded_entity_pairs=}")
+        logging.info(f"{self.allowed_binary_relation_entity_type_pairs=}")
+        logging.info(f"{self.allowed_unary_relation_entity_types=}")
         assert self.first_entity_tag != self.second_entity_tag
 
     @staticmethod
@@ -76,6 +80,57 @@ class TextToMultiLabelDataGenerator:
                     kept_sentences.append(s)
         # concatenate selected sentences
         return " ".join(kept_sentences)
+
+    def convert_first_entity_id_to_tagged_text_dict2dataframe(
+        self, first_entity_id_to_tagged_text: dict, x: Dict[str, Any], y: Dict[str, Any]
+    ) -> pd.DataFrame:
+        if x["id"] == y["id"] == 8:
+            pass
+        # filter only possible
+        rows = []
+        if x["id"] == y["id"]:
+            if x["type"] in self.allowed_unary_relation_entity_types:
+                rows.append(
+                    [
+                        x["id"],
+                        y["id"],
+                        x["type"],
+                        y["type"],
+                        first_entity_id_to_tagged_text[x["id"]],
+                    ]
+                )
+        else:
+            if (x["type"], y["type"]) in self.allowed_binary_relation_entity_type_pairs:
+                rows.append(
+                    [
+                        x["id"],
+                        y["id"],
+                        x["type"],
+                        y["type"],
+                        first_entity_id_to_tagged_text[x["id"]],
+                    ]
+                )
+            if (y["type"], x["type"]) in self.allowed_binary_relation_entity_type_pairs:
+                rows.append(
+                    [
+                        y["id"],
+                        x["id"],
+                        y["type"],
+                        x["type"],
+                        first_entity_id_to_tagged_text[y["id"]],
+                    ]
+                )
+        logging.debug("ending")
+        return pd.DataFrame(
+            rows,
+            columns=[
+                "e1_id",
+                "e2_id",
+                "e1_type",
+                "e2_type",
+                self.text_col,
+            ],
+        )
 
     def tag_entities(
         self, text: str, x: Dict[str, Any], y: Dict[str, Any]
@@ -143,26 +198,8 @@ class TextToMultiLabelDataGenerator:
                 else:
                     tagged_text += entity_span
             first_entity_id_to_tagged_text[first_e_id] = tagged_text
-        # filter only possible
-        rows = []
-        if (x["type"], y["type"]) not in self.excluded_entity_pairs:
-            rows.append([x["id"], y["id"], first_entity_id_to_tagged_text[x["id"]]])
-        if (y["type"], x["type"]) not in self.excluded_entity_pairs and x["id"] != y[
-            "id"
-        ]:
-            rows.append([y["id"], x["id"], first_entity_id_to_tagged_text[y["id"]]])
-        logging.debug("ending")
-        return (
-            pd.DataFrame(
-                rows,
-                columns=[
-                    self.first_entity_tag,
-                    self.second_entity_tag,
-                    self.text_col,
-                ],
-            )
-            if len(rows) > 0
-            else pd.DataFrame()
+        return self.convert_first_entity_id_to_tagged_text_dict2dataframe(
+            first_entity_id_to_tagged_text, x, y
         )
 
     def convert_relations_to_dataframe(
@@ -180,8 +217,8 @@ class TextToMultiLabelDataGenerator:
         """
         # logging.info("starting")
         columns = [
-            self.first_entity_tag,
-            self.second_entity_tag,
+            "e1_id",
+            "e2_id",
             TARGET_COL,
         ]
         if not relations:
@@ -279,13 +316,13 @@ class TextToMultiLabelDataGenerator:
         return entity_pair_to_text_df.join(
             entity_pair_to_relations_df.set_index(
                 [
-                    self.first_entity_tag,
-                    self.second_entity_tag,
+                    "e1_id",
+                    "e2_id",
                 ]
             ),
             on=[
-                self.first_entity_tag,
-                self.second_entity_tag,
+                "e1_id",
+                "e2_id",
             ],
         )
 
@@ -382,24 +419,98 @@ class Mention2TypeDataGenerator(TextToMultiLabelDataGenerator):
                 else:
                     tagged_text += entity_span
             first_entity_id_to_tagged_text[first_e_id] = tagged_text
-        # filter only possible
-        rows = []
-        if (x["type"], y["type"]) not in self.excluded_entity_pairs:
-            rows.append([x["id"], y["id"], first_entity_id_to_tagged_text[x["id"]]])
-        if (y["type"], x["type"]) not in self.excluded_entity_pairs and x["id"] != y[
-            "id"
-        ]:
-            rows.append([y["id"], x["id"], first_entity_id_to_tagged_text[y["id"]]])
-        logging.debug("ending")
-        return (
-            pd.DataFrame(
-                rows,
-                columns=[
-                    self.first_entity_tag,
-                    self.second_entity_tag,
-                    self.text_col,
-                ],
-            )
-            if len(rows) > 0
-            else pd.DataFrame()
+        return self.convert_first_entity_id_to_tagged_text_dict2dataframe(
+            first_entity_id_to_tagged_text, x, y
+        )
+
+
+@dataclass
+class EntityBracketTaggingDataGenerator(TextToMultiLabelDataGenerator):
+    """Example:
+    La commune de Matéri est endeuillée suite à un grave {accident de circulation}.
+    Un bus a fini sa course dans un [ravin], faisant deux morts, dont le secrétaire du
+    parti politique ABCer, Jones Abdelfattah, et des dizaines de blessés parmi les
+    passagers.
+    """
+
+    e1_open_tag: str = field(default="{")
+    e1_close_tag: str = field(default="}")
+    e2_open_tag: str = field(default="[")
+    e2_close_tag: str = field(default="]")
+    single_entity_open_tag: str = field(default="<")
+    single_entity_close_tag: str = field(default=">")
+
+    def tag_entities(
+        self, text: str, x: Dict[str, Any], y: Dict[str, Any]
+    ) -> pd.DataFrame:
+        """Mark the 2 given entities as the are the argument of a possible ordered
+          relation to generate the 2 possible tagged texts where:
+
+        1. x is the first entity of the relations, and y the second
+        2. y is the first entity of the relations, and x the second
+
+        Args:
+            text (str): the text as stated in the original dataset
+            x (Dict[str, Any]): an entity mentioned in the text as annotated
+              in the original dataset e.g.
+              {
+                "id": 0,
+                "mentions": [
+                    {"value": "accident", "start": 70, "end": 78},
+                    {"value": "accident de circulation", "start": 100, "end": 123}
+                ]
+              }
+            y (Dict[str, Any]): an entity mentioned in the text as annotated
+              in the original dataset; y is different from x.
+
+        Returns:
+            pd.DataFrame: with two columns with respectively the ids of the first and
+              second entities in the marked text, and a last column with the marked text
+        """
+        logging.debug("starting")
+        start2mentions = {
+            m["start"]: m | {"id": e["id"], "type": e["type"]}
+            for e in [x, y]
+            for m in e["mentions"]
+        }
+        entities_ids = {x["id"], y["id"]}
+        first_entity_id_to_tagged_text = {_id: "" for _id in entities_ids}
+        # order text spans with entity id (None for not entity)
+        id_start_end_pairs = []
+        next_start = 0
+        for start in sorted(list(start2mentions.keys())):
+            e_id = start2mentions[start]["id"]
+            if next_start != start:
+                id_start_end_pairs.append((None, (next_start, start)))
+            next_start = start2mentions[start]["end"]
+            id_start_end_pairs.append((e_id, (start, next_start)))
+        if next_start < len(text):
+            id_start_end_pairs.append((None, (next_start, len(text))))
+        # build the tagged texts
+        entity_types = []
+        for first_e_id in entities_ids:
+            tagged_text = ""
+            for e_id, (start, end) in id_start_end_pairs:
+                text_span = text[start:end]
+                open_tag = None
+                close_tag = None
+                if e_id is not None:  # text_span is an entity mention
+                    if x["id"] == y["id"]:  # single entity relation (e.g. gender)
+                        open_tag = self.single_entity_open_tag
+                        close_tag = self.single_entity_close_tag
+                    else:  # binary relation
+                        if e_id == first_e_id:
+                            open_tag = self.e1_open_tag
+                            close_tag = self.e1_close_tag
+                        else:
+                            open_tag = self.e2_open_tag
+                            close_tag = self.e2_close_tag
+                    entity_type = start2mentions[start]["type"]
+                    tagged_text += f"{open_tag} {text_span} {close_tag}"
+                    entity_types.append(entity_type)
+                else:  # non-entity text span
+                    tagged_text += text_span
+            first_entity_id_to_tagged_text[first_e_id] = tagged_text
+        return self.convert_first_entity_id_to_tagged_text_dict2dataframe(
+            first_entity_id_to_tagged_text, x, y
         )
