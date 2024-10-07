@@ -297,7 +297,7 @@ class CustomDataset(torch.utils.data.Dataset):
 train_dataset = CustomDataset(df_train, tokenizer, MAX_LEN, target_list)
 valid_dataset = CustomDataset(df_valid, tokenizer, MAX_LEN, target_list)
 
-TRAIN_BATCH_SIZE = 60
+TRAIN_BATCH_SIZE = 80
 VALID_BATCH_SIZE = 16
 
 train_data_loader = torch.utils.data.DataLoader(
