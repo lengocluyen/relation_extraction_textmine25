@@ -116,15 +116,6 @@ mlb = MultiLabelBinarizer()
 mlb.fit([categories_to_check])
 logging.info(f"{mlb.classes_=}")
 
-# Directories
-generated_data_dir_path = os.path.join(INTERIM_DIR, "multilabel_tagged_text_dataset")
-assert os.path.exists(generated_data_dir_path)
-
-preprocessed_data_dir = os.path.join(
-    INTERIM_DIR, "one_hot_multilabel_tagged_text_dataset"
-)
-labeled_preprocessed_data_dir_path = os.path.join(preprocessed_data_dir, "train")
-
 
 # Functions to load and process data
 def load_csv(dir_or_file_path: str, index_col=None, sep=",") -> pd.DataFrame:
@@ -144,7 +135,7 @@ def load_csv(dir_or_file_path: str, index_col=None, sep=",") -> pd.DataFrame:
     )
 
 
-def process_data(data: pd.DataFrame) -> pd.DataFrame:
+def one_hot_encode_relations(data: pd.DataFrame) -> pd.DataFrame:
     return pd.concat(
         [
             data,
@@ -182,23 +173,5 @@ def process_csv_to_csv(in_dir_or_file_path: str, out_dir_path: str) -> None:
                 )
             }
         )
-        processed_data = process_data(data)
+        processed_data = one_hot_encode_relations(data)
         processed_data.to_csv(preprocessed_data_filename, sep="\t")
-
-
-# Load and preprocess data
-if not os.path.exists(labeled_preprocessed_data_dir_path):
-    process_csv_to_csv(
-        os.path.join(generated_data_dir_path, "train"),
-        labeled_preprocessed_data_dir_path,
-    )
-else:
-    logging.warning(
-        "One-Hot-label dataset dir already exists at:"
-        f" {labeled_preprocessed_data_dir_path}."
-        "\n Delete this directory to recompute one-hot dataset."
-    )
-labeled_df = load_csv(labeled_preprocessed_data_dir_path, index_col=0, sep="\t")
-df_train, df_valid = train_test_split(
-    labeled_df, test_size=0.2, shuffle=True, random_state=42
-)
