@@ -252,7 +252,7 @@ target_list = mlb.classes_
 logging.info(f"{len(target_list)} categories = {target_list}")
 
 # Hyperparameters
-MAX_LEN = 200
+MAX_LEN = 50
 logging.info(f"Init tokenizer w/ {MAX_LEN=}...")
 tokenizer = CamembertTokenizer.from_pretrained(BASE_CHECKPOINT)
 task_special_tokens = ["<e1>", "</e1>", "<e2>", "</e2>"] + [
@@ -297,7 +297,7 @@ class CustomDataset(torch.utils.data.Dataset):
 train_dataset = CustomDataset(df_train, tokenizer, MAX_LEN, target_list)
 valid_dataset = CustomDataset(df_valid, tokenizer, MAX_LEN, target_list)
 
-TRAIN_BATCH_SIZE = 80
+TRAIN_BATCH_SIZE = 256
 VALID_BATCH_SIZE = 16
 
 train_data_loader = torch.utils.data.DataLoader(
