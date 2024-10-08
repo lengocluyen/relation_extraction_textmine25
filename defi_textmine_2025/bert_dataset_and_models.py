@@ -1,3 +1,4 @@
+import gc
 import numpy as np
 from tqdm import tqdm
 
@@ -272,6 +273,42 @@ class TransformerAttentionBertModel(nn.Module):
         )  # Shape: [batch_size, n_classes]
 
         return logits
+
+
+class BertCnnModel(nn.Module):
+
+    def __init__(self, bert_model: PreTrainedModel, embedding_size: int = 768):
+        super(BertCnnModel, self).__init__()
+        self.bert = bert_model
+        self.conv = nn.Conv2d(
+            in_channels=13,
+            out_channels=13,
+            kernel_size=(3, embedding_size),
+            padding=True,
+        )
+        self.relu = nn.ReLU()
+        self.pool = nn.MaxPool2d(kernel_size=3, stride=1)
+        self.dropout = nn.Dropout(0.1)
+        self.fc = nn.Linear(
+            442, 3
+        )  # before : 442 with max_length 36 # 806 with max_length 64
+        self.flat = nn.Flatten()
+        self.softmax = nn.LogSoftmax(dim=1)
+
+    def forward(self, sent_id, mask):
+        _, _, all_layers = self.bert(
+            sent_id, attention_mask=mask, output_hidden_states=True
+        )
+        # all_layers  = [13, 32, 64, 768]
+        x = torch.transpose(
+            torch.cat(tuple([t.unsqueeze(0) for t in all_layers]), 0), 0, 1
+        )
+        del all_layers
+        gc.collect()
+        torch.cuda.empty_cache()
+        x = self.pool(self.dropout(self.relu(self.conv(self.dropout(x)))))
+        x = self.fc(self.dropout(self.flat(self.dropout(x))))
+        return x
 
 
 def loss_fn(
