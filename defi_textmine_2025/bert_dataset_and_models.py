@@ -275,10 +275,10 @@ class TransformerAttentionBertModel(nn.Module):
         return logits
 
 
-class BertCnnModel(nn.Module):
+class BertCnn2dModel(nn.Module):
 
     def __init__(self, bert_model: PreTrainedModel, embedding_size: int = 768):
-        super(BertCnnModel, self).__init__()
+        super(BertCnn2dModel, self).__init__()
         self.bert = bert_model
         self.conv = nn.Conv2d(
             in_channels=13,
