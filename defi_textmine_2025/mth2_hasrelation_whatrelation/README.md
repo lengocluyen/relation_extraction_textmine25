@@ -81,6 +81,16 @@ example format: `[text_index]: [text extract with tagged entities]`
 3667: <Anam Destresse>, président de ... le coup. <Anam Destresse>, qui faisait
 ````
 
+- CIVILIAN	CIVILIAN	['GENDER_MALE'] - error on gender
+````
+41922: ... Il ne cessait de crier le nom d'une < femme >, puis a appuyé sur la gâchette. ...
+````
+
+- MATERIEL	LENGTH	['HAS_FOR_LENGTH'] - missing entity mention labelling for `Il`:
+````
+168: ... Il mesurait [ 77,46 mètres ] de long avec une capacité de 1017 passagers. ...
+````
+
 ## Spelling errors
 
 - 3787: _... à Londres. **Malrgé** la pluie ..._

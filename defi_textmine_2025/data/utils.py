@@ -146,18 +146,33 @@ def convert_text_to_entity_spans(
     return span_and_entity_id_pairs
 
 
-def get_cat_var_distribution(cat_var: pd.Series) -> pd.DataFrame:
-    return pd.concat(
-        [cat_var.value_counts(), cat_var.value_counts(normalize=True)], axis=1
-    )
+def get_cat_var_distribution(cat_var: pd.Series | pd.DataFrame) -> pd.DataFrame:
+    if isinstance(cat_var, pd.Series):
+        return pd.concat(
+            [cat_var.value_counts(), cat_var.value_counts(normalize=True)], axis=1
+        )
+    else:
+        return pd.concat(
+            [
+                cat_var.sum(axis=0).rename("count"),
+                (cat_var.sum(axis=0) / cat_var.shape[0]).rename("proportion"),
+            ],
+            axis=1,
+        )
 
 
-def compute_class_weights(df: pd.DataFrame, class_names: list) -> pd.Series:
+def compute_class_weights(df: pd.DataFrame, label_columns: list) -> pd.Series:
+    """
+    # Source: https://www.tensorflow.org/tutorials/structured_data/imbalanced_data#calculate_class_weights
+    # Scaling by total/2 helps keep the loss to a similar magnitude.
+    """
     n_examples = df.shape[0]
-    n_classes = len(class_names)
+    n_classes = len(label_columns)
+    if n_classes == 1:
+        label_columns = label_columns[0]
+        n_classes = df[label_columns].nunique()
     return (
-        df[class_names]
-        .sum(axis=0)
-        .map(lambda x: (1 / x) * (n_examples / n_classes))
+        get_cat_var_distribution(df[label_columns])["count"]
+        .apply(lambda x: (1 / x) * (n_examples / n_classes))
         .rename("weight")
     )
