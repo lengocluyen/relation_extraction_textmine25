@@ -1,19 +1,27 @@
+import pandas as pd
 import torch
+from transformers import PreTrainedTokenizer
 
 
 class CustomDataset(torch.utils.data.Dataset):
-    def __init__(self, df, tokenizer, max_len, target_list):
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        tokenizer: PreTrainedTokenizer,
+        max_n_tokens: str,
+        text_column: str,
+        label_columns: list[str],
+    ):
         self.tokenizer = tokenizer
-        self.df = df
-        self.title = list(df["text"])
-        self.targets = self.df[target_list].values
-        self.max_len = max_len
+        self.texts = list(df[text_column])
+        self.targets = df[label_columns].values
+        self.max_len = max_n_tokens
 
     def __len__(self):
-        return len(self.title)
+        return len(self.texts)
 
     def __getitem__(self, index):
-        text = str(self.title[index])
+        text = str(self.texts[index])
         text = " ".join(text.split())
         inputs = self.tokenizer.encode_plus(
             text,

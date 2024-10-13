@@ -1,20 +1,28 @@
 # Method2
 Trying to reduce the confusion between classes and improve accuracy in small classes.
+1. Problem fraiming: _how to tag and restrain the text to the most expressive part, reducing noise?_
+2. Relation identification (RI): _is the entity-tagged text expressing any relation?_
+3. Relation classification (RC): _what relations is expressed then?_
 
-1. Tagging the entities in texts and returned a dataframe with columns:
+In the next subsections we describe how we proceed for each of these 3 steps:
+
+## 1. Problem fraiming: Tagging the entities in texts and returned a dataframe with columns:
     - `text_index`
     - `e1_id`: id of the subject/head entity in the list of entities of the text
     - `e2_id`: id of the object/tail entity in the list of entities of the text
     - `e1_type`: subject/head entity type
     - `e2_type`: object/tail entity type
     - `text`: full text with entity mentions tagged according to their respective type.
+    - `reduced_text`: text reduced to only sentences containing either:
+        - both entities (if there is any)
+        - at least one of the entities
     - `relations`: list of relations between the entities
-2. Filtering to identify whether the tagged text might expressed a possible relation
+## 2. Filtering to identify whether the tagged text might expressed a possible relation
     1. Rule-based filtering tagged texts that imply:
         - if head == tail, an entity type is in a unary relation in the train set
         - otherwise, an entity type pair that is in a binary relation in the train set
     2. ML-based filtering using a binary classification to distinguishes in scope and out-of scope (`oos`) relation: i.e. **does the tagged text express any relation?**
-3. If the text has a relation then determine what relations are expressed:
+## 3. If the text has a relation then determine what relations are expressed:
     - if a single entity is tagged, then a unary relation extractor is used to determine what attribute of the entity is expressed
     - Otherwise, a binary relation extractor is use to identify which ones of the other relations are expressed
 
@@ -68,6 +76,16 @@ example format: `[text_index]: [text extract with tagged entities]`
 3667: ... la décapitation d’un <homme> cagoulé a été diffusée à la télévision. Il s’agissait du Général <Martin Kumba>, reconnue grâce à une montre de marque qu’<il> avait à la main. ...
 ````
 
+- 	CIVILIAN ['GENDER_MALE', 'GENDER_FEMALE'] CIVILIAN (1 example): _entity labelling error, two different entities labeled as the same person_
+````
+157: Le bilan fait état d'une < personne > gravement blessée. L'< automobiliste > circulant en direction de Nantes a percuté l’arrière d’un poids-lourd qui < le > précédait puis s’est déporté sur la voie opposée. Le capot de la voiture appartenant à M. < Ali Alissone > a été fortement endommagé dans cette collision. La présence de l'Office National des secours a permis de sortir la < conductrice > de son véhicule."
+````
+
+- ACCIDENT	`['DEATHS_NUMBER', 'INJURED_NUMBER']`	 QUANTITY_EXACT	(1 example): `the number of deaths cannot be the number of injured`
+````
+15: ...Un bus a fini sa course dans un ravin, faisant [ deux ] morts, dont le se...
+````
+
 
 ## Binary relations
 
@@ -75,6 +93,11 @@ example format: `[text_index]: [text extract with tagged entities]`
 # Issues
 
 # labelling errors
+
+- 	CIVILIAN ['GENDER_MALE', 'GENDER_FEMALE'] CIVILIAN (1 example): _entity labelling error, two different entities labeled as the same person_
+````
+157: Le bilan fait état d'une < personne > gravement blessée. L'< automobiliste > circulant en direction de Nantes a percuté l’arrière d’un poids-lourd qui < le > précédait puis s’est déporté sur la voie opposée. Le capot de la voiture appartenant à M. < Ali Alissone > a été fortement endommagé dans cette collision. La présence de l'Office National des secours a permis de sortir la < conductrice > de son véhicule."
+````
 
 - CIVILIAN GENDER_FEMALE CIVILIAN (label error, should be GENDER_MALE because of `président` and `a été blessé`)
 ````
@@ -100,3 +123,6 @@ example format: `[text_index]: [text extract with tagged entities]`
 ````
 51698: ... que le { propriétaire } de la boutique...
 ````
+
+31 relations
+16 ou 18 attributs

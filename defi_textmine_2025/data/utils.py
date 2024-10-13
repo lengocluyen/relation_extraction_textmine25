@@ -1,7 +1,9 @@
+from glob import glob
 from typing import Any, Dict, List, Tuple
 import os
 import json
 import pandas as pd
+from sklearn.preprocessing import MultiLabelBinarizer
 
 TARGET_COL = "relations"
 INPUT_COLS = ["text", "entities"]
@@ -30,19 +32,21 @@ for dir_path in [EDA_DIR, INTERIM_DIR, LOGGING_DIR, MODELS_DIR, OUTPUT_DIR]:
 submission_path = os.path.join(OUTPUT_DIR, "submission.csv")
 
 
-# def clean_text(text: str) -> str:
-#     RAW_STR_TO_CLEAN_STR = {
-#         "\n": "",
-#         "‘’": '"',
-#         "’’": '"',
-#         "”": '"',
-#         "“": '"',
-#         "’": '"',
-#         " ": " ",
-#     }
-#     for raw_str, clean_str in RAW_STR_TO_CLEAN_STR.items():
-#         text = re.sub(raw_str, clean_str, text)
-#     return text.strip()
+def load_csv(dir_or_file_path: str, index_col=None, sep=",") -> pd.DataFrame:
+    if os.path.isdir(dir_or_file_path):
+        all_files = glob(os.path.join(dir_or_file_path, "*.csv"))
+    else:
+        assert dir_or_file_path.endswith(".csv")
+        all_files = [dir_or_file_path]
+    assert len(all_files) > 0
+    return pd.concat(
+        [
+            pd.read_csv(filename, index_col=index_col, header=0, sep=sep)
+            for filename in all_files
+        ],
+        axis=0,
+        ignore_index=True,
+    )
 
 
 def load_labeled_raw_data() -> pd.DataFrame:
@@ -88,18 +92,25 @@ def print_value_types(data: pd.DataFrame) -> None:
             print(col, col_type)
 
 
-def save_data(data: pd.DataFrame, csv_path: str, with_index: bool = True) -> None:
+def save_data(data: pd.DataFrame, dst_file_path: str, with_index: bool = True) -> None:
     """save data into a file at file_path
 
     Args:
         data (pd.DataFrame): data to save
-        file_path (str): destination file
+        dst_file_path (str): destination file
         with_index(bool): whether to save the index too
     """
-    dest_dir_path = os.path.dirname(csv_path)
+    dest_dir_path = os.path.dirname(dst_file_path)
     if not os.path.exists(dest_dir_path):
         os.makedirs(dest_dir_path)
-    data.to_csv(csv_path, index=with_index)
+    if dst_file_path.endswith(".csv"):
+        data.to_csv(dst_file_path, index=with_index)
+    elif dst_file_path.endswith(".parquet"):
+        data.to_parquet(dst_file_path)
+    else:
+        raise Exception(
+            f"Supporting only .csv and .parquet extensions: fix {dst_file_path}"
+        )
 
 
 def convert_text_to_entity_spans(
