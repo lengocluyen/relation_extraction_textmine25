@@ -4,6 +4,9 @@ python -m defi_textmine_2025.method2.evaluation.cross_validation_split
 
 import logging
 
+from defi_textmine_2025.method2.data.relation_and_entity_classes import (
+    RELATIONS_TO_DROP,
+)
 from defi_textmine_2025.settings import RANDOM_SEED
 from defi_textmine_2025.settings import EDA_DIR, INTERIM_DIR, LOGGING_DIR
 from defi_textmine_2025.set_logging import config_logging
@@ -24,22 +27,17 @@ from defi_textmine_2025.data.utils import (
     get_cat_var_distribution,
     save_data,
 )
-from defi_textmine_2025.method2.data.utils import (
-    RELATIONS_TO_DROP,
-    NO_RELATION_CLASS,
-    RELATION_CLASSES,
+from defi_textmine_2025.method2.data.target_encoding import (
     encode_target_to_onehot,
+    onehot_encoder,
+    all_target_columns,
 )
 
 N_FOLDS = 5
 
-all_target_columns = [NO_RELATION_CLASS] + RELATION_CLASSES
 
 # after defi_textmine_2025/method2/data/reduce_texts.py
 logging.info(f"{RELATIONS_TO_DROP=}")
-
-onehot_encoder = MultiLabelBinarizer().fit([all_target_columns])
-logging.info(f"{onehot_encoder.classes_=}")
 
 labeled_df = load_csv(f"{INTERIM_DIR}/reduced_text_w_entity_bracket/train", index_col=0)
 logging.info(f"Loaded {labeled_df.shape}")

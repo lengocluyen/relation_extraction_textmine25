@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 
 RANDOM_SEED = 0  # for reproducibility
@@ -12,3 +13,7 @@ OUTPUT_DIR = os.path.join(CHALLENGE_DIR, "output")
 for dir_path in [EDA_DIR, INTERIM_DIR, LOGGING_DIR, MODELS_DIR, OUTPUT_DIR]:
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
+
+
+def get_now_time_as_str():
+    return datetime.now().strftime("%Y%m%dT%H%M%S")

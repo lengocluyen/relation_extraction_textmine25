@@ -3,16 +3,17 @@ import os
 import logging
 from typing import List, Tuple
 
-from defi_textmine_2025.method2.data.utils import (
-    FULL_TAGGED_TEXT_COL,
-    REDUCED_TAGGED_TEXT_COL,
-)
-
 logging.basicConfig(
     level=logging.WARNING,
     format="[%(asctime)s|%(levelname)s|%(module)s.py:%(lineno)s] %(message)s",
     datefmt="%H:%M:%S",
 )
+
+from defi_textmine_2025.method2.data.relation_and_entity_classes import (
+    FULL_TAGGED_TEXT_COL,
+    REDUCED_TAGGED_TEXT_COL,
+)
+
 import sys
 import pandas as pd
 import stanza

@@ -9,9 +9,11 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 CONSOLE_DEFAULT_FORMAT = (
-    "%(asctime)s|%(levelname)s|(%(filename)s.py:%(lineno)d) - %(message)s"
+    "%(asctime)s|%(levelname)s|(%(filename)s:%(lineno)d) - %(message)s"
 )
-FILE_DEFAULT_FORMAT = "%(asctime)s|%(levelname)s|%(filename)s.py - %(message)s - (%(pathname)s:%(lineno)d)"
+FILE_DEFAULT_FORMAT = (
+    "%(asctime)s|%(levelname)s|%(filename)s - %(message)s - (%(pathname)s:%(lineno)d)"
+)
 
 
 class CustomFormatter(logging.Formatter):
