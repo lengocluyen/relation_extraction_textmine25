@@ -5,12 +5,19 @@ import json
 import pandas as pd
 from sklearn.preprocessing import MultiLabelBinarizer
 
+from defi_textmine_2025.settings import (
+    CHALLENGE_DIR,
+    EDA_DIR,
+    INTERIM_DIR,
+    LOGGING_DIR,
+    MODELS_DIR,
+    OUTPUT_DIR,
+)
+
 TARGET_COL = "relations"
 INPUT_COLS = ["text", "entities"]
 ID_COL = "id"
 
-CHALLENGE_ID = "defi-text-mine-2025"
-CHALLENGE_DIR = f"data/{CHALLENGE_ID}"
 assert os.path.exists(CHALLENGE_DIR), f"path not found: {CHALLENGE_DIR=}"
 train_raw_data_path = os.path.join(CHALLENGE_DIR, "raw", "train.csv")
 test_raw_data_path = os.path.join(CHALLENGE_DIR, "raw", "test_01-07-2024.csv")
@@ -19,15 +26,6 @@ sample_submission_path = os.path.join(CHALLENGE_DIR, "raw", "sample_submission.c
 assert os.path.exists(train_raw_data_path)
 assert os.path.exists(test_raw_data_path)
 assert os.path.exists(sample_submission_path)
-
-EDA_DIR = os.path.join(CHALLENGE_DIR, "eda")
-INTERIM_DIR = os.path.join(CHALLENGE_DIR, "interim")
-LOGGING_DIR = os.path.join(CHALLENGE_DIR, "logs")
-MODELS_DIR = os.path.join(CHALLENGE_DIR, "models")
-OUTPUT_DIR = os.path.join(CHALLENGE_DIR, "output")
-for dir_path in [EDA_DIR, INTERIM_DIR, LOGGING_DIR, MODELS_DIR, OUTPUT_DIR]:
-    if not os.path.exists(dir_path):
-        os.makedirs(dir_path)
 
 submission_path = os.path.join(OUTPUT_DIR, "submission.csv")
 

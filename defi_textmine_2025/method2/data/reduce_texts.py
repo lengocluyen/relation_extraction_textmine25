@@ -3,6 +3,11 @@ import os
 import logging
 from typing import List, Tuple
 
+from defi_textmine_2025.method2.data.utils import (
+    FULL_TAGGED_TEXT_COL,
+    REDUCED_TAGGED_TEXT_COL,
+)
+
 logging.basicConfig(
     level=logging.WARNING,
     format="[%(asctime)s|%(levelname)s|%(module)s.py:%(lineno)s] %(message)s",
@@ -70,7 +75,9 @@ def reduce_to_text_of_interest_csv_to_csv(in_csv_path: str, out_csv_path: str) -
     # load data
     df = pd.read_csv(in_csv_path)
     # apply the processing
-    df["reduced_text"] = df["text"].apply(reduce_to_text_of_interest)
+    df[REDUCED_TAGGED_TEXT_COL] = df[FULL_TAGGED_TEXT_COL].apply(
+        reduce_to_text_of_interest
+    )
     # save data
     df.to_csv(out_csv_path)
     logging.warning(f"Finish {in_csv_path} -> {out_csv_path}")

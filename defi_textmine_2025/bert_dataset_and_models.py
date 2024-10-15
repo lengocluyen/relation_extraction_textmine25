@@ -386,6 +386,7 @@ def train_model(model, training_loader, optimizer, _class_weights_tensor, device
         # Update progress bar
         loop.set_description("")
         loop.set_postfix(batch_loss=loss.cpu().detach().numpy())
+        # break
 
     # returning: trained model, model accuracy, mean loss
     predictions = torch.stack(predictions)
@@ -393,10 +394,9 @@ def train_model(model, training_loader, optimizer, _class_weights_tensor, device
     target_values = torch.stack(target_values)
 
     return (
-        model,
+        np.mean(losses),
         float(correct_predictions) / num_samples,
         f1_score(target_values, predictions, average="macro", zero_division=0),
-        np.mean(losses),
     )
 
 
@@ -436,15 +436,16 @@ def eval_model(model, validation_loader, _class_weights_tensor, device):
             predictions.extend(preds)
             prediction_probs.extend(outputs)
             target_values.extend(targets)
+            # break
 
     predictions = torch.stack(predictions)
     prediction_probs = torch.stack(prediction_probs)
     target_values = torch.stack(target_values)
 
     return (
+        np.mean(losses),
         float(correct_predictions) / num_samples,
         f1_score(target_values, predictions, average="macro", zero_division=0),
-        np.mean(losses),
     )
 
 
