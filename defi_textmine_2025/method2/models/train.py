@@ -4,7 +4,6 @@ python -m defi_textmine_2025.method2.models.train
 
 from collections import defaultdict
 import os
-import sys
 import random
 from typing import Tuple
 import logging
@@ -18,20 +17,18 @@ from defi_textmine_2025.settings import (
 )
 from defi_textmine_2025.set_logging import config_logging
 
-config_logging(f"{LOGGING_DIR}/method2/train-{get_now_time_as_str()}.log")
+start_date_as_str = get_now_time_as_str()
+config_logging(f"{LOGGING_DIR}/method2/train-{start_date_as_str}.log")
 
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
-from datasets import DatasetDict, Dataset
 from transformers import AutoTokenizer, AutoModel, AdamW
 
 from defi_textmine_2025.method2.data.relation_and_entity_classes import (
-    NO_RELATION_CLASS,
     REDUCED_TAGGED_TEXT_COL,
-    RELATION_CLASSES,
     NO_RELATION_CLASS,
     WITH_RELATION_CLASS,
 )
@@ -57,7 +54,7 @@ cv_fold_data_dir = f"{INTERIM_DIR}/method2-5_fold_cv"
 BASE_CHECKPOINT = "camembert/camembert-base"
 tokenizer = AutoTokenizer.from_pretrained(BASE_CHECKPOINT)
 
-TRAIN_BATCH_SIZE = 90
+TRAIN_BATCH_SIZE = 16
 VAL_BATCH_SIZE = 72
 LEARNING_RATE = 2e-5
 WEIGHT_DECAY = 0.01
@@ -180,7 +177,7 @@ def get_task_data(task_name: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
 if __name__ == "__main__":
 
     num_fold = 1  # int(sys.argv[1])
-    task_name = "RI"
+    task_name = "RC3"
 
     logging.info(f"{task_name=}")
     target_columns = task_name2targetcolumns[task_name]
@@ -274,9 +271,9 @@ if __name__ == "__main__":
         f"{MAX_N_TOKENS=}, {MAX_EPOCHS=}, {PATIENCE=}"
     )
     for epoch in range(1, MAX_EPOCHS + 1):
-        print(
+        logging.info(
             f"Epoch {epoch}/{MAX_EPOCHS} [patience count: {n_not_better_steps} "
-            f"/ {PATIENCE} - {best_f1_macro=:.3f}]"
+            f"/ {PATIENCE} - {best_f1_macro=:.5f}]"
         )
         train_loss, train_acc, train_f1 = train_model(
             model,
@@ -290,8 +287,8 @@ if __name__ == "__main__":
             model, val_data_loader, class_weights, device, multilabel=ismultilabel
         )
 
-        logging.info(f"{train_loss=:.4f}, {train_acc=:.3f}, {train_f1=:.3f}")
-        logging.info(f"{val_loss=:.4f}, {val_acc=:.3f}, {val_f1=:.3f}")
+        logging.info(f"{train_loss=:.4f}, {train_acc=:.3f}, {train_f1=:.5f}")
+        logging.info(f"{val_loss=:.4f}, {val_acc=:.3f}, {val_f1=:.5f}")
 
         history["train_loss"].append(train_loss)
         history["train_acc"].append(train_acc)
@@ -300,29 +297,44 @@ if __name__ == "__main__":
         history["val_acc"].append(val_acc)
         history["val_f1_macro"].append(val_f1)
 
+        plt.figure()
         plt.rcParams["figure.figsize"] = (10, 7)
-        plt.plot(history["train_f1_macro"], label="train F1 macro")
-        plt.plot(history["val_f1_macro"], label="validation F1 macro")
-        plt.plot(history["train_loss"], label="train loss")
-        plt.plot(history["val_loss"], label="validation loss")
-        plt.title("Training history")
+        plt.plot(
+            history["train_f1_macro"],
+            label=f"train F1 macro [max={np.max(history['train_f1_macro']):.5f}]",
+        )
+        plt.plot(
+            history["val_f1_macro"],
+            label=f"validation F1 macro [max={np.max(history['val_f1_macro']):.5f}]",
+        )
+        plt.plot(
+            history["train_loss"],
+            label=f"train loss [min={np.min(history['train_loss']):.5f}]",
+        )
+        plt.plot(
+            history["val_loss"],
+            label=f"validation loss [min={np.min(history['val_loss']):.5f}]",
+        )
+        plt.title(f"Training history - {task_name} sub-task")
         plt.ylabel("F1 macro / loss")
         plt.xlabel("Epoch")
         plt.legend()
         plt.ylim([0, 1])
         plt.grid()
         plt.savefig(
-            f"{LOGGING_DIR}/method2/training_history_{model_state_basename}.png"
+            f"{LOGGING_DIR}/method2/training_history_{model_state_basename}"
+            f"-{start_date_as_str}.png"
         )
 
         # Save best model
         if val_f1 > best_f1_macro:
-            logging.warning(
-                f"#NEW_BEST_VAL_F1 {best_f1_macro:.3f} -> Saving new best model at {model_dict_state_path}"
-            )
-            torch.save(model.state_dict(), model_dict_state_path)
             best_f1_macro = val_f1
             n_not_better_steps = 0
+            logging.warning(
+                f"#NEW_BEST_VAL_F1 {val_f1:.5f} -> Saving new best model"
+                f" at {model_dict_state_path}"
+            )
+            torch.save(model.state_dict(), model_dict_state_path)
         else:
             n_not_better_steps += 1
             if n_not_better_steps >= PATIENCE:

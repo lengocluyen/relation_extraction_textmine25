@@ -55,9 +55,6 @@ class FlaubertBasedModel(nn.Module):
     ):
         super(FlaubertBasedModel, self).__init__()
         self.embedding_model = embedding_model
-        # if you want to add new tokens to the vocabulary, then in general you’ll need
-        # to resize the embedding layers with
-        # Source https://discuss.huggingface.co/t/adding-new-tokens-while-preserving-tokenization-of-adjacent-tokens/12604
         self.embedding_model.resize_token_embeddings(len(tokenizer))
         self.head_model = head_model
 
@@ -247,7 +244,8 @@ class TransformerAttentionBertModel(nn.Module):
             outputs.last_hidden_state
         )  # Shape: [batch_size, seq_len, hidden_size]
 
-        # Transpose for Transformer encoder (required shape: [seq_len, batch_size, hidden_size])
+        # Transpose for Transformer encoder
+        # (required shape: [seq_len, batch_size, hidden_size])
         hidden_states = hidden_states.permute(1, 0, 2)
 
         # Create a source mask based on attention mask
@@ -381,7 +379,7 @@ def train_model(
         # correct_predictions += np.sum(outputs==targets)
         # num_samples += targets.size   # total number of elements in the 2D array
         if multilabel:
-            outputs = torch.sigmoid(outputs, dim=1).cpu().detach()
+            outputs = torch.sigmoid(outputs).cpu().detach()
         else:  # single-label
             outputs = torch.softmax(outputs, dim=1).cpu().detach()
         # thresholding at 0.5
@@ -404,7 +402,7 @@ def train_model(
         optimizer.step()
         # Update progress bar
         loop.set_description("")
-        loop.set_postfix(batch_loss=loss.cpu().detach().numpy())
+        loop.set_postfix({"batch_loss": f"{loss.cpu().detach().numpy():.5f}"})
         # break
 
     # returning: trained model, model accuracy, mean loss
@@ -450,7 +448,7 @@ def eval_model(
             # validation accuracy
             if multilabel:
                 # add sigmoid, for the training sigmoid is in BCEWithLogitsLoss
-                outputs = torch.sigmoid(outputs, dim=1).cpu().detach()  # probabilities
+                outputs = torch.sigmoid(outputs).cpu().detach()  # probabilities
             else:  # single-label
                 outputs = torch.softmax(outputs, dim=1).cpu().detach()  # probabilities
             # thresholding at 0.5

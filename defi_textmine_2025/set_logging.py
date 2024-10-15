@@ -56,7 +56,7 @@ def config_logging(log_file_path: str = None):
         file_handler.setFormatter(
             logging.Formatter(fmt=FILE_DEFAULT_FORMAT, datefmt="%Y-%m-%dT%H:%M:%S")
         )
-        file_handler.setLevel(logging.DEBUG)
+        file_handler.setLevel(logging.INFO)
         logging.root.addHandler(file_handler)
 
     console_handler = logging.StreamHandler(stream=None)
