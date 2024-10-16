@@ -47,11 +47,10 @@ def config_logging(log_file_path: str = None):
     # clear all handlers
     while logging.root.hasHandlers():
         logging.root.removeHandler(logging.root.handlers[0])
-    dir_path = os.path.dirname(log_file_path)
-    if not os.path.exists(dir_path):
-        os.makedirs(dir_path)
-    # logging.root
     if log_file_path:
+        dir_path = os.path.dirname(log_file_path)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
         file_handler = logging.FileHandler(log_file_path)
         file_handler.setFormatter(
             logging.Formatter(fmt=FILE_DEFAULT_FORMAT, datefmt="%Y-%m-%dT%H:%M:%S")

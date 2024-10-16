@@ -4,9 +4,6 @@ python -m defi_textmine_2025.method2.evaluation.cross_validation_split
 
 import logging
 
-from defi_textmine_2025.method2.data.relation_and_entity_classes import (
-    RELATIONS_TO_DROP,
-)
 from defi_textmine_2025.settings import RANDOM_SEED
 from defi_textmine_2025.settings import EDA_DIR, INTERIM_DIR, LOGGING_DIR
 from defi_textmine_2025.set_logging import config_logging
@@ -37,13 +34,9 @@ N_FOLDS = 5
 
 
 # after defi_textmine_2025/method2/data/reduce_texts.py
-logging.info(f"{RELATIONS_TO_DROP=}")
 
 labeled_df = load_csv(f"{INTERIM_DIR}/reduced_text_w_entity_bracket/train", index_col=0)
 logging.info(f"Loaded {labeled_df.shape}")
-
-labeled_df = labeled_df.query(f"relations not in {RELATIONS_TO_DROP}")
-logging.info(f"after dropping RELATIONS_TO_DROP  {labeled_df.shape}")
 
 labeled_df = encode_target_to_onehot(
     labeled_df, TARGET_COL, onehot_encoder

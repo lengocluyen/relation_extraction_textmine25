@@ -142,7 +142,7 @@ def get_task_data(task_name: str, num_fold: int) -> Tuple[pd.DataFrame, pd.DataF
             label
             for a_task, labels in task_name2targetcolumns.items()
             for label in labels
-            if a_task != task_name
+            if a_task != task_name and label in train_df
         ]
 
         train_df = train_df[

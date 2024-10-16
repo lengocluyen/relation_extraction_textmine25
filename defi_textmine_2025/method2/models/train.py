@@ -12,7 +12,7 @@ from defi_textmine_2025.settings import (
 from defi_textmine_2025.set_logging import config_logging
 
 start_date_as_str = get_now_time_as_str()
-task_name = "RC1"
+task_name = "RC3"
 config_logging(f"{LOGGING_DIR}/method2/train-{task_name}-{start_date_as_str}.log")
 
 from matplotlib import pyplot as plt
@@ -40,7 +40,7 @@ from defi_textmine_2025.method2.models.shared_toolbox import (
     get_task_data,
 )
 
-TRAIN_BATCH_SIZE = 72
+TRAIN_BATCH_SIZE = 64
 VAL_BATCH_SIZE = 96
 LEARNING_RATE = 2e-7
 WEIGHT_DECAY = 0.01
