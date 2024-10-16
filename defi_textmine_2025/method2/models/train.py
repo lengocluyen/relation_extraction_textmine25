@@ -4,15 +4,9 @@ python -m defi_textmine_2025.method2.models.train
 
 from collections import defaultdict
 import os
-import random
-from typing import Tuple
 import logging
-
 from defi_textmine_2025.settings import (
-    INTERIM_DIR,
     LOGGING_DIR,
-    MODELS_DIR,
-    RANDOM_SEED,
     get_now_time_as_str,
 )
 from defi_textmine_2025.set_logging import config_logging
@@ -24,162 +18,40 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import DataLoader
-from transformers import AutoTokenizer, AutoModel, AdamW
+from transformers import AdamW
 
-from defi_textmine_2025.method2.data.relation_and_entity_classes import (
-    REDUCED_TAGGED_TEXT_COL,
-    NO_RELATION_CLASS,
-    WITH_RELATION_CLASS,
-)
-from defi_textmine_2025.method2.data.target_encoding import ORDERED_CLASSES
 from defi_textmine_2025.data.utils import (
     compute_class_weights,
     get_cat_var_distribution,
 )
-from defi_textmine_2025.method2.models.dataset import CustomDataset
-from defi_textmine_2025.method2.models.model_custom_classes import BertMlp
 from defi_textmine_2025.bert_dataset_and_models import eval_model, train_model
+from defi_textmine_2025.method2.models.shared_toolbox import (
+    BASE_CHECKPOINT,
+    MAX_N_TOKENS,
+    get_model_state_base_name,
+    get_model_state_path,
+    init_model,
+    task_name2targetcolumns,
+    task_name2ismultilabel,
+    get_data_loaders,
+    get_task_data,
+)
 
-# reproducibility
-# following https://pytorch.org/docs/stable/notes/randomness.html#reproducibility
-random.seed(RANDOM_SEED)
-np.random.seed(RANDOM_SEED)
-torch.manual_seed(RANDOM_SEED)
-# torch.use_deterministic_algorithms(True)
-
-N_FOLDS = 5
-cv_fold_data_dir = f"{INTERIM_DIR}/method2-5_fold_cv"
-
-BASE_CHECKPOINT = "camembert/camembert-base"
-tokenizer = AutoTokenizer.from_pretrained(BASE_CHECKPOINT)
-
-TRAIN_BATCH_SIZE = 16
-VAL_BATCH_SIZE = 72
-LEARNING_RATE = 2e-5
+TRAIN_BATCH_SIZE = 8
+VAL_BATCH_SIZE = 96
+LEARNING_RATE = 2e-6
 WEIGHT_DECAY = 0.01
-MAX_N_TOKENS = 150
 MAX_EPOCHS = 100
-PATIENCE = 10
-
-RI_TARGET_COL = NO_RELATION_CLASS
-RC_1_TARGET_COLS = ["GENDER_MALE", "GENDER_FEMALE"]
-RC_2_TARGET_COLS = [
-    "HAS_CATEGORY",
-    "HAS_CONSEQUENCE",
-    "HAS_QUANTITY",
-    "IS_OF_NATIONALITY",
-    "HAS_COLOR",
-    "IS_DEAD_ON",
-    "WEIGHS",
-    "IS_REGISTERED_AS",
-    "IS_BORN_ON",
-    "HAS_FOR_LENGTH",
-    "WAS_CREATED_IN",
-    "WAS_DISSOLVED_IN",
-    "HAS_FOR_WIDTH",
-    "HAS_FOR_HEIGHT",
-    "HAS_LONGITUDE",
-    "HAS_LATITUDE",
-    "INITIATED",
-    "DIED_IN",
-    "IS_OF_SIZE",
-    "DEATHS_NUMBER",
-    "INJURED_NUMBER",
-]
-RC_3_TARGET_COLS = [
-    "IS_LOCATED_IN",
-    "HAS_CONTROL_OVER",
-    "OPERATES_IN",
-    "IS_IN_CONTACT_WITH",
-    "STARTED_IN",
-    "IS_AT_ODDS_WITH",
-    "IS_PART_OF",
-    "START_DATE",
-    "END_DATE",
-    "IS_COOPERATING_WITH",
-    "RESIDES_IN",
-    "HAS_FAMILY_RELATIONSHIP",
-    "CREATED",
-    "IS_BORN_IN",
-]
-
-
-task_name2targetcolumns = {
-    # binary
-    "RI": [NO_RELATION_CLASS, WITH_RELATION_CLASS],
-    # binary
-    "RC1": [label for label in ORDERED_CLASSES if label in RC_1_TARGET_COLS],
-    # multiclass single label
-    "RC2": [label for label in ORDERED_CLASSES if label in RC_2_TARGET_COLS],
-    # multilabel
-    "RC3": [label for label in ORDERED_CLASSES if label in RC_3_TARGET_COLS],
-}
-
-task_name2ismultilabel = {
-    "RI": False,  # binary
-    "RC1": False,  # binary
-    "RC2": False,  # multiclass single label
-    "RC3": True,  # multilabel
-}
-assert len(RC_1_TARGET_COLS) + len(RC_2_TARGET_COLS) + len(RC_3_TARGET_COLS) == 37
-
-
-def load_fold_data(k: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """return train and validation labeled dataframes
-
-    Args:
-        k (int): number of the fold to load
-
-    Returns:
-        Tuple[pd.DataFrame, pd.DataFrame]: train_df, val_df
-    """
-
-    return (
-        pd.read_parquet(f"{cv_fold_data_dir}/{split_name}-fold{k}-mth2.parquet")
-        for split_name in ("train", "validation")
-    )
-
-
-def tokenize_function(example: dict):
-    return tokenizer(
-        # max n_token without loosing entity, see setp0_data_preparation
-        example[REDUCED_TAGGED_TEXT_COL],
-        truncation=True,
-        max_length=MAX_N_TOKENS,
-    )
-
-
-def get_task_data(task_name: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    train_df, val_df = load_fold_data(num_fold)
-    train_df = train_df.assign(**{WITH_RELATION_CLASS: 1 - train_df[NO_RELATION_CLASS]})
-    val_df = val_df.assign(**{WITH_RELATION_CLASS: 1 - val_df[NO_RELATION_CLASS]})
-    logging.info(f"Loaded data {train_df.shape=}, {val_df.shape=}")
-
-    out_of_scope_columns = [
-        label
-        for a_task, labels in task_name2targetcolumns.items()
-        for label in labels
-        if a_task != task_name
-    ]
-
-    train_df = train_df[
-        train_df[task_name2targetcolumns[task_name]].sum(axis=1) > 0
-    ].drop(out_of_scope_columns, axis=1)
-    val_df = val_df[val_df[task_name2targetcolumns[task_name]].sum(axis=1) > 0].drop(
-        out_of_scope_columns, axis=1
-    )
-    logging.info(f"Filtered data {train_df.shape=}, {val_df.shape=}")
-    logging.info(f"Filtered data {train_df.columns=}, {val_df.columns=}")
-    return train_df, val_df
+PATIENCE = 30
 
 
 if __name__ == "__main__":
 
     num_fold = 1  # int(sys.argv[1])
-    task_name = "RC3"
+    task_name = "RI"
+    model_name: str = "BERT+MLP"
 
-    logging.info(f"{task_name=}")
+    logging.info(f"Training {model_name} for {task_name}")
     target_columns = task_name2targetcolumns[task_name]
     logging.info(f"{target_columns=}")
     ismultilabel = task_name2ismultilabel[task_name]
@@ -188,8 +60,10 @@ if __name__ == "__main__":
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     logging.info(f"{device=}")
     logging.warning(f"Preparing data for the sub-task {task_name}...")
-    train_df, val_df = get_task_data(task_name)
-
+    train_df, val_df = get_task_data(task_name, num_fold)
+    train_data_loader, val_data_loader = get_data_loaders(
+        task_name, train_df, val_df, TRAIN_BATCH_SIZE, VAL_BATCH_SIZE
+    )
     n_examples = train_df.shape[0]
     n_classes = (
         train_df[target_columns].nunique()
@@ -197,38 +71,7 @@ if __name__ == "__main__":
         else len(target_columns)
     )
     logging.info(f"{n_examples=}, {n_classes=}")
-    logging.warning("Init and tokenize the dataset")
-    train_ds = CustomDataset(
-        train_df,
-        tokenizer,
-        max_n_tokens=MAX_N_TOKENS,
-        text_column=REDUCED_TAGGED_TEXT_COL,
-        label_columns=target_columns,
-    )
-    logging.info(f"{train_ds=}")
-    val_ds = CustomDataset(
-        val_df,
-        tokenizer,
-        max_n_tokens=MAX_N_TOKENS,
-        text_column=REDUCED_TAGGED_TEXT_COL,
-        label_columns=target_columns,
-    )
-    logging.info(f"{val_ds=}")
-    logging.warning("Init dataloaders")
-    # Data loaders
-    train_data_loader = DataLoader(
-        train_ds,
-        batch_size=TRAIN_BATCH_SIZE,
-        shuffle=True,
-        num_workers=0,
-    )
 
-    val_data_loader = DataLoader(
-        val_ds,
-        batch_size=VAL_BATCH_SIZE,
-        shuffle=False,
-        num_workers=0,
-    )
     logging.warning(f"Computute class weights with {n_examples=}, {n_classes=}")
     class_weights_df = compute_class_weights(
         train_df,
@@ -244,13 +87,7 @@ if __name__ == "__main__":
     class_weights = torch.from_numpy(class_weights_df.values).to(device)
     logging.info(f"{class_weights=}")
     logging.warning("Initialize the model")
-    model = BertMlp(
-        name="relation_identification",
-        embedding_model=AutoModel.from_pretrained(BASE_CHECKPOINT, return_dict=True),
-        embedding_size=768 if "base" in BASE_CHECKPOINT else 1024,
-        hidden_dim=128,
-        n_classes=n_classes,
-    )
+    model = init_model(task_name, model_name, n_classes, BASE_CHECKPOINT)
     model.to(device)
     logging.info(f"Initialized model:\n{model}")
     logging.warning("Start the training loop...")
@@ -258,11 +95,10 @@ if __name__ == "__main__":
     best_f1_macro = 0
     n_not_better_steps = 0
     history = defaultdict(list)
-    model_dir_path = os.path.join(MODELS_DIR, "method2")
-    model_state_basename = (
-        f"{task_name}-fold{num_fold}-BERT+MLP-{BASE_CHECKPOINT.split('/')[-1]}"
+    model_state_basename = get_model_state_base_name(
+        task_name, num_fold, BASE_CHECKPOINT
     )
-    model_dict_state_path = os.path.join(model_dir_path, f"{model_state_basename}.bin")
+    model_dict_state_path = get_model_state_path(task_name, num_fold, BASE_CHECKPOINT)
     if not os.path.exists(os.path.dirname(model_dict_state_path)):
         os.makedirs(os.path.dirname(model_dict_state_path))
     optimizer = AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
@@ -272,7 +108,7 @@ if __name__ == "__main__":
     )
     for epoch in range(1, MAX_EPOCHS + 1):
         logging.info(
-            f"Epoch {epoch}/{MAX_EPOCHS} [patience count: {n_not_better_steps} "
+            f"Starting epoch {epoch}/{MAX_EPOCHS} [patience count: {n_not_better_steps} "
             f"/ {PATIENCE} - {best_f1_macro=:.5f}]"
         )
         train_loss, train_acc, train_f1 = train_model(

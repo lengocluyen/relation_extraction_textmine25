@@ -401,7 +401,6 @@ def train_model(
         # grad descent step
         optimizer.step()
         # Update progress bar
-        loop.set_description("")
         loop.set_postfix({"batch_loss": f"{loss.cpu().detach().numpy():.5f}"})
         # break
 
