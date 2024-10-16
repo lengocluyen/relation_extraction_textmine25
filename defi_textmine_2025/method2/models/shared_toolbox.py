@@ -35,8 +35,11 @@ N_FOLDS = 5
 cv_fold_data_dir = f"{INTERIM_DIR}/method2-5_fold_cv"
 
 MAX_N_TOKENS = 200
-BASE_CHECKPOINT = "camembert/camembert-base"
-tokenizer = AutoTokenizer.from_pretrained(BASE_CHECKPOINT)
+BASE_CHECKPOINT_NAME = "camembert/camembert-base"
+logging.info(f"Initializing the tokenizer {BASE_CHECKPOINT_NAME}")
+tokenizer = AutoTokenizer.from_pretrained(
+    BASE_CHECKPOINT_NAME, clean_up_tokenization_spaces=True
+)
 
 RI_TARGET_COL = NO_RELATION_CLASS
 RC_1_TARGET_COLS = ["GENDER_MALE", "GENDER_FEMALE"]
@@ -133,22 +136,23 @@ def get_task_data(task_name: str, num_fold: int) -> Tuple[pd.DataFrame, pd.DataF
     train_df = train_df.assign(**{WITH_RELATION_CLASS: 1 - train_df[NO_RELATION_CLASS]})
     val_df = val_df.assign(**{WITH_RELATION_CLASS: 1 - val_df[NO_RELATION_CLASS]})
     logging.info(f"Loaded data {train_df.shape=}, {val_df.shape=}")
+    if task_name:
+        logging.info("Filtering the data...")
+        out_of_scope_columns = [
+            label
+            for a_task, labels in task_name2targetcolumns.items()
+            for label in labels
+            if a_task != task_name
+        ]
 
-    out_of_scope_columns = [
-        label
-        for a_task, labels in task_name2targetcolumns.items()
-        for label in labels
-        if a_task != task_name
-    ]
-
-    train_df = train_df[
-        train_df[task_name2targetcolumns[task_name]].sum(axis=1) > 0
-    ].drop(out_of_scope_columns, axis=1)
-    val_df = val_df[val_df[task_name2targetcolumns[task_name]].sum(axis=1) > 0].drop(
-        out_of_scope_columns, axis=1
-    )
-    logging.info(f"Filtered data {train_df.shape=}, {val_df.shape=}")
-    logging.info(f"Filtered data {train_df.columns=}, {val_df.columns=}")
+        train_df = train_df[
+            train_df[task_name2targetcolumns[task_name]].sum(axis=1) > 0
+        ].drop(out_of_scope_columns, axis=1)
+        val_df = val_df[
+            val_df[task_name2targetcolumns[task_name]].sum(axis=1) > 0
+        ].drop(out_of_scope_columns, axis=1)
+        logging.info(f"Filtered data {train_df.shape=}, {val_df.shape=}")
+        logging.info(f"Filtered data {train_df.columns=}, {val_df.columns=}")
     return train_df, val_df
 
 
@@ -195,7 +199,7 @@ def get_data_loaders(
     return train_data_loader, val_data_loader
 
 
-def get_model_state_base_name(
+def get_model_checkpoint_basename(
     task_name: str,
     num_fold: str,
     base_checkpoint: str = "camembert/camembert-base",
@@ -204,23 +208,25 @@ def get_model_state_base_name(
     return f"{task_name}-fold{num_fold}-{model_name}-{base_checkpoint.split('/')[-1]}"
 
 
-def get_model_state_path(
-    task_name: str, num_fold: str, base_checkpoint: str = BASE_CHECKPOINT
+def get_model_checkpoint_path(
+    task_name: str, num_fold: str, base_ckpt_name: str = BASE_CHECKPOINT_NAME
 ) -> str:
-    model_state_basename = get_model_state_base_name(
-        task_name, num_fold, base_checkpoint
+    model_checkpoint_basename = get_model_checkpoint_basename(
+        task_name, num_fold, base_ckpt_name
     )
     model_dir_path = os.path.join(MODELS_DIR, "method2")
-    return os.path.join(model_dir_path, f"{model_state_basename}.bin")
+    if not os.path.exists(model_dir_path):
+        os.makedirs(model_dir_path)
+    return os.path.join(model_dir_path, f"{model_checkpoint_basename}.ckpt")
 
 
 def init_bert_mlp_model(
-    task_name: str, n_classes: int, base_checkpoint: str = BASE_CHECKPOINT
+    task_name: str, n_classes: int, base_ckpt_name: str = BASE_CHECKPOINT_NAME
 ) -> BertMlp:
     return BertMlp(
         name=task_name,
-        embedding_model=AutoModel.from_pretrained(base_checkpoint, return_dict=True),
-        embedding_size=768 if "base" in base_checkpoint else 1024,
+        embedding_model=AutoModel.from_pretrained(base_ckpt_name, return_dict=True),
+        embedding_size=768 if "base" in base_ckpt_name else 1024,
         hidden_dim=128,
         n_classes=n_classes,
     )
@@ -230,10 +236,61 @@ def init_model(
     task_name: str,
     model_name: str = "BERT+MLP",
     n_classes: int = 2,
-    base_checkpoint: str = BASE_CHECKPOINT,
+    base_ckpt_name: str = BASE_CHECKPOINT_NAME,
 ) -> BertBasedModel:
     match model_name:
         case "BERT+MLP":
-            return init_bert_mlp_model(task_name, n_classes, base_checkpoint)
+            return init_bert_mlp_model(task_name, n_classes, base_ckpt_name)
         case _:
             raise ValueError(f"Unsupported {model_name=}")
+
+
+def load_model(
+    task_name: str,
+    num_fold: int,
+    base_ckpt_name: str,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+):
+    """https://pytorch.org/tutorials/beginner/saving_loading_models.html#saving-loading-a-general-checkpoint-for-inference-and-or-resuming-training"""
+    model_ckpt_path = get_model_checkpoint_path(task_name, num_fold, base_ckpt_name)
+    checkpoint: dict = torch.load(
+        model_ckpt_path, weights_only=False, map_location=device
+    )
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    last_epoch = checkpoint["last_epoch"]
+    train_loop_history = checkpoint["train_loop_history"]
+    best_val_f1_macro = checkpoint["best_val_f1_macro"]
+    return (
+        model,
+        optimizer,
+        last_epoch,
+        train_loop_history,
+        best_val_f1_macro,
+    )
+
+
+def save_model(
+    task_name: str,
+    num_fold: int,
+    base_ckpt_name: str,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    last_epoch: int,
+    train_loop_history: dict,
+    best_val_f1_macro: float,
+):
+    """https://pytorch.org/tutorials/beginner/saving_loading_models.html#saving-loading-a-general-checkpoint-for-inference-and-or-resuming-training"""
+    checkpoint_path = get_model_checkpoint_path(task_name, num_fold, base_ckpt_name)
+    torch.save(
+        {
+            "last_epoch": last_epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "train_loop_history": train_loop_history,
+            "best_val_f1_macro": best_val_f1_macro,
+        },
+        checkpoint_path,
+    )

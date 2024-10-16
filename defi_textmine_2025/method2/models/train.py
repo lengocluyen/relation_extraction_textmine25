@@ -12,7 +12,8 @@ from defi_textmine_2025.settings import (
 from defi_textmine_2025.set_logging import config_logging
 
 start_date_as_str = get_now_time_as_str()
-config_logging(f"{LOGGING_DIR}/method2/train-{start_date_as_str}.log")
+task_name = "RC1"
+config_logging(f"{LOGGING_DIR}/method2/train-{task_name}-{start_date_as_str}.log")
 
 from matplotlib import pyplot as plt
 import numpy as np
@@ -26,32 +27,33 @@ from defi_textmine_2025.data.utils import (
 )
 from defi_textmine_2025.bert_dataset_and_models import eval_model, train_model
 from defi_textmine_2025.method2.models.shared_toolbox import (
-    BASE_CHECKPOINT,
+    BASE_CHECKPOINT_NAME,
     MAX_N_TOKENS,
-    get_model_state_base_name,
-    get_model_state_path,
+    get_model_checkpoint_basename,
+    get_model_checkpoint_path,
     init_model,
+    load_model,
+    save_model,
     task_name2targetcolumns,
     task_name2ismultilabel,
     get_data_loaders,
     get_task_data,
 )
 
-TRAIN_BATCH_SIZE = 8
+TRAIN_BATCH_SIZE = 72
 VAL_BATCH_SIZE = 96
-LEARNING_RATE = 2e-6
+LEARNING_RATE = 2e-7
 WEIGHT_DECAY = 0.01
 MAX_EPOCHS = 100
-PATIENCE = 30
+PATIENCE = 10
 
 
 if __name__ == "__main__":
 
     num_fold = 1  # int(sys.argv[1])
-    task_name = "RI"
     model_name: str = "BERT+MLP"
 
-    logging.info(f"Training {model_name} for {task_name}")
+    logging.info(f"Training {model_name} for {task_name} on {num_fold=}")
     target_columns = task_name2targetcolumns[task_name]
     logging.info(f"{target_columns=}")
     ismultilabel = task_name2ismultilabel[task_name]
@@ -86,30 +88,47 @@ if __name__ == "__main__":
     logging.info(f"Class weights: \n{class_distr_weight_df}")
     class_weights = torch.from_numpy(class_weights_df.values).to(device)
     logging.info(f"{class_weights=}")
+    model_state_basename = get_model_checkpoint_basename(
+        task_name, num_fold, BASE_CHECKPOINT_NAME, model_name
+    )
     logging.warning("Initialize the model")
-    model = init_model(task_name, model_name, n_classes, BASE_CHECKPOINT)
+    model = init_model(task_name, model_name, n_classes, BASE_CHECKPOINT_NAME)
     model.to(device)
-    logging.info(f"Initialized model:\n{model}")
+    optimizer = AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+    last_epoch = 0
+    best_val_f1_macro = 0
+    train_loop_history = defaultdict(list)
+    model_ckpt_path = get_model_checkpoint_path(
+        task_name, num_fold, BASE_CHECKPOINT_NAME
+    )
+    if os.path.exists(model_ckpt_path):
+        logging.warning(
+            f"Resume training from last best checkpoint at {model_ckpt_path}"
+        )
+        (
+            model,
+            optimizer,
+            last_epoch,
+            train_loop_history,
+            best_val_f1_macro,
+        ) = load_model(
+            task_name, num_fold, BASE_CHECKPOINT_NAME, model, optimizer, device
+        )
+
+    logging.info(f"model:\n{model}")
+
     logging.warning("Start the training loop...")
     # Training loop
-    best_f1_macro = 0
-    n_not_better_steps = 0
-    history = defaultdict(list)
-    model_state_basename = get_model_state_base_name(
-        task_name, num_fold, BASE_CHECKPOINT
-    )
-    model_dict_state_path = get_model_state_path(task_name, num_fold, BASE_CHECKPOINT)
-    if not os.path.exists(os.path.dirname(model_dict_state_path)):
-        os.makedirs(os.path.dirname(model_dict_state_path))
-    optimizer = AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+
     logging.info(
         f"{TRAIN_BATCH_SIZE=}, {VAL_BATCH_SIZE=}, {LEARNING_RATE=}, {WEIGHT_DECAY=}, "
         f"{MAX_N_TOKENS=}, {MAX_EPOCHS=}, {PATIENCE=}"
     )
-    for epoch in range(1, MAX_EPOCHS + 1):
+    patience_count = 0
+    for epoch in range(last_epoch + 1, MAX_EPOCHS + 1):
         logging.info(
-            f"Starting epoch {epoch}/{MAX_EPOCHS} [patience count: {n_not_better_steps} "
-            f"/ {PATIENCE} - {best_f1_macro=:.5f}]"
+            f"Starting epoch {epoch}/{MAX_EPOCHS} [patience count: {patience_count} "
+            f"/ {PATIENCE} - {best_val_f1_macro=:.5f}]"
         )
         train_loss, train_acc, train_f1 = train_model(
             model,
@@ -126,30 +145,30 @@ if __name__ == "__main__":
         logging.info(f"{train_loss=:.4f}, {train_acc=:.3f}, {train_f1=:.5f}")
         logging.info(f"{val_loss=:.4f}, {val_acc=:.3f}, {val_f1=:.5f}")
 
-        history["train_loss"].append(train_loss)
-        history["train_acc"].append(train_acc)
-        history["train_f1_macro"].append(train_f1)
-        history["val_loss"].append(val_loss)
-        history["val_acc"].append(val_acc)
-        history["val_f1_macro"].append(val_f1)
+        train_loop_history["train_loss"].append(train_loss)
+        train_loop_history["train_acc"].append(train_acc)
+        train_loop_history["train_f1_macro"].append(train_f1)
+        train_loop_history["val_loss"].append(val_loss)
+        train_loop_history["val_acc"].append(val_acc)
+        train_loop_history["val_f1_macro"].append(val_f1)
 
         plt.figure()
         plt.rcParams["figure.figsize"] = (10, 7)
         plt.plot(
-            history["train_f1_macro"],
-            label=f"train F1 macro [max={np.max(history['train_f1_macro']):.5f}]",
+            train_loop_history["train_f1_macro"],
+            label=f"train F1 macro [max={np.max(train_loop_history['train_f1_macro']):.5f}]",
         )
         plt.plot(
-            history["val_f1_macro"],
-            label=f"validation F1 macro [max={np.max(history['val_f1_macro']):.5f}]",
+            train_loop_history["val_f1_macro"],
+            label=f"validation F1 macro [max={np.max(train_loop_history['val_f1_macro']):.5f}]",
         )
         plt.plot(
-            history["train_loss"],
-            label=f"train loss [min={np.min(history['train_loss']):.5f}]",
+            train_loop_history["train_loss"],
+            label=f"train loss [min={np.min(train_loop_history['train_loss']):.5f}]",
         )
         plt.plot(
-            history["val_loss"],
-            label=f"validation loss [min={np.min(history['val_loss']):.5f}]",
+            train_loop_history["val_loss"],
+            label=f"validation loss [min={np.min(train_loop_history['val_loss']):.5f}]",
         )
         plt.title(f"Training history - {task_name} sub-task")
         plt.ylabel("F1 macro / loss")
@@ -163,16 +182,25 @@ if __name__ == "__main__":
         )
 
         # Save best model
-        if val_f1 > best_f1_macro:
-            best_f1_macro = val_f1
-            n_not_better_steps = 0
+        if val_f1 > best_val_f1_macro:
+            best_val_f1_macro = val_f1
+            patience_count = 0
             logging.warning(
                 f"#NEW_BEST_VAL_F1 {val_f1:.5f} -> Saving new best model"
-                f" at {model_dict_state_path}"
+                f" at {model_ckpt_path}"
             )
-            torch.save(model.state_dict(), model_dict_state_path)
+            save_model(
+                task_name,
+                num_fold,
+                BASE_CHECKPOINT_NAME,
+                model,
+                optimizer,
+                epoch,
+                train_loop_history,
+                best_val_f1_macro,
+            )
         else:
-            n_not_better_steps += 1
-            if n_not_better_steps >= PATIENCE:
+            patience_count += 1
+            if patience_count >= PATIENCE:
                 logging.info("Early stopping")
                 break
