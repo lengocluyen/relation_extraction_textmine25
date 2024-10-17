@@ -12,59 +12,75 @@ from defi_textmine_2025.settings import (
 from defi_textmine_2025.set_logging import config_logging
 
 start_date_as_str = get_now_time_as_str()
-task_name = "RC3"
-config_logging(f"{LOGGING_DIR}/method2/train-{task_name}-{start_date_as_str}.log")
+task_name = "subtask2"
+step_name = "RI"
+config_logging(
+    f"{LOGGING_DIR}/method2/train-{task_name}-{step_name}-{start_date_as_str}.log"
+    # f"{LOGGING_DIR}/method2/train-{task_name}-{step_name}.log"
+)
 
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from transformers import AdamW
-
+from defi_textmine_2025.method2.models.model_custom_classes import BertMlp
+from defi_textmine_2025.method2.models.task_definition import Task
 from defi_textmine_2025.data.utils import (
     compute_class_weights,
     get_cat_var_distribution,
 )
-from defi_textmine_2025.bert_dataset_and_models import eval_model, train_model
+from defi_textmine_2025.bert_dataset_and_models import (
+    BertBasedModel,
+    eval_model,
+    train_model,
+)
 from defi_textmine_2025.method2.models.shared_toolbox import (
     BASE_CHECKPOINT_NAME,
     MAX_N_TOKENS,
     get_model_checkpoint_basename,
     get_model_checkpoint_path,
+    get_target_columns,
     init_model,
+    load_fold_data,
     load_model,
     save_model,
-    task_name2targetcolumns,
     task_name2ismultilabel,
     get_data_loaders,
-    get_task_data,
 )
 
-TRAIN_BATCH_SIZE = 64
+TRAIN_BATCH_SIZE = 32
 VAL_BATCH_SIZE = 96
-LEARNING_RATE = 2e-7
+LEARNING_RATE = 2e-8
 WEIGHT_DECAY = 0.01
 MAX_EPOCHS = 100
-PATIENCE = 10
+PATIENCE = 30
 
 
 if __name__ == "__main__":
 
     num_fold = 1  # int(sys.argv[1])
-    model_name: str = "BERT+MLP"
+    model_class: BertBasedModel = BertMlp
 
-    logging.info(f"Training {model_name} for {task_name} on {num_fold=}")
-    target_columns = task_name2targetcolumns[task_name]
+    logging.info(
+        f"Training {model_class.__name__} for {task_name}-{step_name} on {num_fold=}"
+    )
+    target_columns = get_target_columns(task_name, step_name)
     logging.info(f"{target_columns=}")
-    ismultilabel = task_name2ismultilabel[task_name]
+    ismultilabel = task_name2ismultilabel[task_name] if step_name == "RC" else False
     logging.info(f"{ismultilabel=}")
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     logging.info(f"{device=}")
-    logging.warning(f"Preparing data for the sub-task {task_name}...")
-    train_df, val_df = get_task_data(task_name, num_fold)
+    logging.warning(f"Preparing data for the sub-task {task_name} and {step_name=}...")
+    train_df, val_df = load_fold_data(num_fold)
+    task = Task.init_predefined_sub_task(
+        task_name, pd.concat([train_df, val_df], axis=0)
+    )
+    train_df = task.filter_train_data(train_df)
+    val_df = task.filter_train_data(val_df)
+    logging.info(f"Task filtered data for train: {train_df.shape=}, {val_df.shape=}")
     train_data_loader, val_data_loader = get_data_loaders(
-        task_name, train_df, val_df, TRAIN_BATCH_SIZE, VAL_BATCH_SIZE
+        task_name, step_name, train_df, val_df, TRAIN_BATCH_SIZE, VAL_BATCH_SIZE
     )
     n_examples = train_df.shape[0]
     n_classes = (
@@ -89,21 +105,25 @@ if __name__ == "__main__":
     class_weights = torch.from_numpy(class_weights_df.values).to(device)
     logging.info(f"{class_weights=}")
     model_state_basename = get_model_checkpoint_basename(
-        task_name, num_fold, BASE_CHECKPOINT_NAME, model_name
+        task_name, step_name, num_fold, BASE_CHECKPOINT_NAME, model_class
     )
+    logging.info(f"{model_state_basename=}")
     logging.warning("Initialize the model")
-    model = init_model(task_name, model_name, n_classes, BASE_CHECKPOINT_NAME)
+    model = init_model(task_name, model_class, n_classes, BASE_CHECKPOINT_NAME)
     model.to(device)
-    optimizer = AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
+    )
     last_epoch = 0
     best_val_f1_macro = 0
     train_loop_history = defaultdict(list)
-    model_ckpt_path = get_model_checkpoint_path(
-        task_name, num_fold, BASE_CHECKPOINT_NAME
+    train_ckpt_path = get_model_checkpoint_path(
+        task_name, step_name, num_fold, BASE_CHECKPOINT_NAME, model_class
     )
-    if os.path.exists(model_ckpt_path):
+    logging.info(f"{train_ckpt_path=}")
+    if os.path.exists(train_ckpt_path):
         logging.warning(
-            f"Resume training from last best checkpoint at {model_ckpt_path}"
+            f"Resume training from last best checkpoint at {train_ckpt_path}"
         )
         (
             model,
@@ -111,9 +131,7 @@ if __name__ == "__main__":
             last_epoch,
             train_loop_history,
             best_val_f1_macro,
-        ) = load_model(
-            task_name, num_fold, BASE_CHECKPOINT_NAME, model, optimizer, device
-        )
+        ) = load_model(train_ckpt_path, model, optimizer, device)
 
     logging.info(f"model:\n{model}")
 
@@ -122,7 +140,7 @@ if __name__ == "__main__":
 
     logging.info(
         f"{TRAIN_BATCH_SIZE=}, {VAL_BATCH_SIZE=}, {LEARNING_RATE=}, {WEIGHT_DECAY=}, "
-        f"{MAX_N_TOKENS=}, {MAX_EPOCHS=}, {PATIENCE=}"
+        f"{MAX_N_TOKENS=}, {MAX_EPOCHS=}, {PATIENCE=} [{model_class.__name__} for {task_name}-{step_name} on {num_fold=}]"
     )
     patience_count = 0
     for epoch in range(last_epoch + 1, MAX_EPOCHS + 1):
@@ -187,12 +205,10 @@ if __name__ == "__main__":
             patience_count = 0
             logging.warning(
                 f"#NEW_BEST_VAL_F1 {val_f1:.5f} -> Saving new best model"
-                f" at {model_ckpt_path}"
+                f" at {train_ckpt_path}"
             )
             save_model(
-                task_name,
-                num_fold,
-                BASE_CHECKPOINT_NAME,
+                train_ckpt_path,
                 model,
                 optimizer,
                 epoch,

@@ -5,60 +5,19 @@ from defi_textmine_2025.method2.data.relation_and_entity_classes import (
     NO_RELATION_CLASS,
     WITH_RELATION_CLASS,
 )
-from defi_textmine_2025.set_logging import config_logging
+
+# from defi_textmine_2025.set_logging import config_logging
+# from defi_textmine_2025.settings import LOGGING_DIR
+# config_logging(f"{LOGGING_DIR}/method2/task_definition.log")
 
 from defi_textmine_2025.data.utils import load_csv
-from defi_textmine_2025.settings import LOGGING_DIR
-
-config_logging(f"{LOGGING_DIR}/method2/task_definition.log")
-
 import pandas as pd
-from defi_textmine_2025.method2.data.target_encoding import ORDERED_CLASSES
 from defi_textmine_2025.method2.models.shared_toolbox import (
-    RC_1_TARGET_COLS,
-    RC_2_TARGET_COLS,
-    RC_3_TARGET_COLS,
+    INPUT_COLUMNS,
+    SUBTASK_NAME2ORDEREDLABELS,
+    SUBTASK_NAME_TO_RELATIONS_TO_DROP_IN_TRAIN_DATA,
     load_fold_data,
 )
-
-
-SUBTASK_NAME2ORDEREDLABELS: dict = {
-    # binary: gender
-    "subtask1": [label for label in ORDERED_CLASSES if label in RC_1_TARGET_COLS],
-    # multiclass single label: non-or-once-coocurrent relation types
-    "subtask2": [label for label in ORDERED_CLASSES if label in RC_2_TARGET_COLS],
-    # multilabel: often co-occurrent relation types
-    "subtask3": [label for label in ORDERED_CLASSES if label in RC_3_TARGET_COLS],
-}
-
-SUBTASK_NAME_TO_RELATIONS_TO_DROP_IN_TRAIN_DATA: dict = {
-    # binary: gender
-    "subtask1": {
-        "['GENDER_MALE', 'GENDER_FEMALE']",
-        "['GENDER_MALE', 'IS_IN_CONTACT_WITH']",
-    },
-    # multiclass single label: non-or-once-coocurrent relation types
-    "subtask2": {
-        "['DEATHS_NUMBER', 'IS_OF_SIZE']",
-        "['DEATHS_NUMBER', 'INJURED_NUMBER']",
-        "['DEATHS_NUMBER', 'INJURED_NUMBER']",
-        "['INITIATED', 'DIED_IN']",
-        "['INITIATED', 'DIED_IN']",
-    },
-    # multilabel: often co-occurrent relation types
-    "subtask3": {},
-}
-
-INPUT_COLUMNS = [
-    "text_index",
-    "e1_id",
-    "e2_id",
-    "e1_type",
-    "e2_type",
-    "text",
-    "relations",
-    "reduced_text",
-]
 
 
 @dataclass
@@ -136,7 +95,7 @@ class Task:
 
 
 if __name__ == "__main__":
-    train_df, val_df = load_fold_data(k=5)
+    train_df, val_df = load_fold_data(1)
     labeled_df = pd.concat([train_df, val_df], axis=0)
     test_df = load_csv(
         "data/defi-text-mine-2025/interim/reduced_text_w_entity_bracket/test"
