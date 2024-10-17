@@ -12,7 +12,7 @@ from defi_textmine_2025.settings import (
 from defi_textmine_2025.set_logging import config_logging
 
 start_date_as_str = get_now_time_as_str()
-task_name = "subtask2"
+task_name = "roottask"
 step_name = "RI"
 config_logging(
     f"{LOGGING_DIR}/method2/train-{task_name}-{step_name}-{start_date_as_str}.log"
@@ -44,13 +44,13 @@ from defi_textmine_2025.method2.models.shared_toolbox import (
     load_fold_data,
     load_model,
     save_model,
-    task_name2ismultilabel,
+    task2step2ismultilabel,
     get_data_loaders,
 )
 
 TRAIN_BATCH_SIZE = 32
 VAL_BATCH_SIZE = 96
-LEARNING_RATE = 2e-8
+LEARNING_RATE = 2e-5
 WEIGHT_DECAY = 0.01
 MAX_EPOCHS = 100
 PATIENCE = 30
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     )
     target_columns = get_target_columns(task_name, step_name)
     logging.info(f"{target_columns=}")
-    ismultilabel = task_name2ismultilabel[task_name] if step_name == "RC" else False
+    ismultilabel = task2step2ismultilabel[task_name][step_name]
     logging.info(f"{ismultilabel=}")
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -76,8 +76,12 @@ if __name__ == "__main__":
     task = Task.init_predefined_sub_task(
         task_name, pd.concat([train_df, val_df], axis=0)
     )
-    train_df = task.filter_train_data(train_df)
-    val_df = task.filter_train_data(val_df)
+    train_df = task.filter_train_data_by_step_name(
+        task.filter_train_data(train_df), step_name, ri_downsample_rate=1.5
+    )
+    val_df = task.filter_train_data_by_step_name(
+        task.filter_train_data(val_df), step_name, ri_downsample_rate=None
+    )
     logging.info(f"Task filtered data for train: {train_df.shape=}, {val_df.shape=}")
     train_data_loader, val_data_loader = get_data_loaders(
         task_name, step_name, train_df, val_df, TRAIN_BATCH_SIZE, VAL_BATCH_SIZE

@@ -12,9 +12,10 @@ from defi_textmine_2025.method2.data.relation_and_entity_classes import (
 
 all_target_columns = [NO_RELATION_CLASS] + RELATION_CLASSES
 onehot_encoder = MultiLabelBinarizer().fit([all_target_columns])
-logging.info(f"{onehot_encoder.classes_=}")
+logging.debug(f"{onehot_encoder.classes_=}")
 
-ORDERED_CLASSES = onehot_encoder.classes_
+ORDERED_CLASSES = onehot_encoder.classes_.tolist()
+logging.info(f"{ORDERED_CLASSES=}")
 
 
 def format_relations_str_to_list(labels_as_str: str) -> list[str]:

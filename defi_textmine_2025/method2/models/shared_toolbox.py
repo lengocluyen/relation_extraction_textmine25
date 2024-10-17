@@ -20,6 +20,7 @@ from defi_textmine_2025.settings import (
 from defi_textmine_2025.method2.data.relation_and_entity_classes import (
     NO_RELATION_CLASS,
     REDUCED_TAGGED_TEXT_COL,
+    RELATION_CLASSES,
     WITH_RELATION_CLASS,
 )
 from defi_textmine_2025.method2.models.dataset import CustomDataset
@@ -85,6 +86,7 @@ RC_3_TARGET_COLS = [
 assert len(RC_1_TARGET_COLS) + len(RC_2_TARGET_COLS) + len(RC_3_TARGET_COLS) == 37
 
 SUBTASK_NAME2ORDEREDLABELS: dict = {
+    "roottask": [label for label in ORDERED_CLASSES if label in RELATION_CLASSES],
     # binary: gender
     "subtask1": [label for label in ORDERED_CLASSES if label in RC_1_TARGET_COLS],
     # multiclass single label: non-or-once-coocurrent relation types
@@ -94,6 +96,7 @@ SUBTASK_NAME2ORDEREDLABELS: dict = {
 }
 
 SUBTASK_NAME_TO_RELATIONS_TO_DROP_IN_TRAIN_DATA: dict = {
+    "roottask": {},
     # binary: gender
     "subtask1": {
         "['GENDER_MALE', 'GENDER_FEMALE']",
@@ -134,9 +137,37 @@ INPUT_COLUMNS = [
 # }
 
 task_name2ismultilabel = {
+    "roottask": False,  # multilabel: the initial task w/ the whole relation types without seperation
     "subtask1": False,  # binary
     "subtask2": False,  # multiclass single label
     "subtask3": True,  # multilabel
+}
+
+task2step2ismultilabel = {
+    "roottask": {  # the initial task w/
+        "RI": False,
+        "RC": True,
+        "RI&RC": True,
+        "RC_multilabel": True,
+    },
+    "subtask1": {  # gender relation types
+        "RI": False,
+        "RC": False,
+        "RI&RC": False,
+        "RC_multilabel": True,
+    },
+    "subtask2": {  # multi-class single label: no-coocurrent relatioon types
+        "RI": False,
+        "RC": False,
+        "RI&RC": False,
+        "RC_multilabel": True,
+    },
+    "subtask3": {  # multilabel: co-oocurrent relation types
+        "RI": False,
+        "RC": True,
+        "RI&RC": True,
+        "RC_multilabel": True,
+    },
 }
 # assert len(RC_1_TARGET_COLS) + len(RC_2_TARGET_COLS) + len(RC_3_TARGET_COLS) == 37
 
@@ -200,6 +231,10 @@ def get_target_columns(task_name: str, step_name: str) -> List[str]:
             return SUBTASK_NAME2ORDEREDLABELS[task_name]
         elif step_name == "RI":
             return RI_TARGET_COLS
+        elif step_name == "RI&RC":
+            return RI_TARGET_COLS + SUBTASK_NAME2ORDEREDLABELS[task_name]
+        elif step_name == "RC_multilabel":
+            return SUBTASK_NAME2ORDEREDLABELS[task_name]
         else:
             raise ValueError(f"Unsupported {step_name=}")
     else:

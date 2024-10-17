@@ -1,4 +1,4 @@
-from typing import List, Set, Tuple
+from typing import List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 import logging
 from defi_textmine_2025.method2.data.relation_and_entity_classes import (
@@ -10,14 +10,16 @@ from defi_textmine_2025.method2.data.relation_and_entity_classes import (
 # from defi_textmine_2025.settings import LOGGING_DIR
 # config_logging(f"{LOGGING_DIR}/method2/task_definition.log")
 
-from defi_textmine_2025.data.utils import load_csv
+from defi_textmine_2025.data.utils import get_cat_var_distribution, load_csv
 import pandas as pd
 from defi_textmine_2025.method2.models.shared_toolbox import (
     INPUT_COLUMNS,
     SUBTASK_NAME2ORDEREDLABELS,
     SUBTASK_NAME_TO_RELATIONS_TO_DROP_IN_TRAIN_DATA,
+    get_target_columns,
     load_fold_data,
 )
+from defi_textmine_2025.settings import RANDOM_SEED
 
 
 @dataclass
@@ -71,6 +73,61 @@ class Task:
         df = self.filter_rows(data)
         cols_to_drop = [col for col in data.columns if col not in INPUT_COLUMNS]
         return df.drop(cols_to_drop, axis=1)
+
+    def filter_train_data_by_step_name(
+        self,
+        data: pd.DataFrame,
+        step_name: str,
+        ri_downsample_rate: Optional[float] = 1.0,
+    ) -> pd.DataFrame:
+        """_summary_
+
+        Args:
+            data (pd.DataFrame): _description_
+            step_name (str): _description_
+            ri_downsample_rate (float, optional): only for step_name==RI.
+              When downsampling the biggest class, how much of the size
+              of the smallest class should the sample of the biggest class
+               be. e.g. if ri_downsample_rate=1, then the original biggest
+              class will be of the same size as the original smallest
+              class. if ri_downsample_rate=1.5, the original class will be 1.5
+              times the size of the original smallest class. Set it to None to avoid
+              downsampling. Defaults to 1.0.
+
+        Raises:
+            ValueError: if the step_name is not in ["RI", "RC", "RI&RC",
+                "RC_multilabel"]
+
+        Returns:
+            pd.DataFrame: filtered data
+        """
+        target_columns = get_target_columns(self.name, step_name)
+        if step_name == "RC":
+            return data[data[NO_RELATION_CLASS] == 0.0][INPUT_COLUMNS + target_columns]
+        elif step_name == "RI":
+            df = data[INPUT_COLUMNS + target_columns]
+            # downsampling
+            if ri_downsample_rate is None:
+                return df
+            else:
+                assert ri_downsample_rate > 0
+                label_distrib_df = get_cat_var_distribution(df[target_columns])["count"]
+                min_size = label_distrib_df.min()
+                max_class_new_size = int(ri_downsample_rate * min_size)
+                max_class_column = label_distrib_df.index[label_distrib_df.argmax()]
+                min_class_df = df[df[max_class_column] == 0]
+                new_max_class_df = df[df[max_class_column] > 0].sample(
+                    n=max_class_new_size, random_state=RANDOM_SEED
+                )
+                return pd.concat([min_class_df, new_max_class_df], axis=0)
+        elif step_name in ["RI&RC", "RC_multilabel"]:
+            return data[INPUT_COLUMNS + target_columns]
+        # elif step_name == "RI&RC":
+        #     return data[INPUT_COLUMNS + target_columns]
+        # elif step_name == "RC_multilabel":
+        #     return data[INPUT_COLUMNS + target_columns]
+        else:
+            raise ValueError(f"Unsupported {step_name=}")
 
     def filter_train_data(self, data: pd.DataFrame) -> pd.DataFrame:
         df = self.filter_rows(data).query(
