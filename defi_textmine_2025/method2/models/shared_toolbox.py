@@ -244,15 +244,15 @@ def get_target_columns(task_name: str, step_name: str) -> List[str]:
 def get_data_loaders(
     task_name: str,
     step_name: str,
-    dfs: Tuple[pd.DataFrame],
-    batch_sizes: Tuple[int],
-    shuffles: Tuple[bool],
-) -> Tuple[DataLoader]:
+    dfs: List[pd.DataFrame],
+    batch_sizes: List[int],
+    shuffles: List[bool],
+) -> List[DataLoader]:
     assert len(dfs) == len(batch_sizes)
     assert len(dfs) == len(shuffles)
     logging.warning(f"Init {len(dfs)} dataloaders...")
     target_columns = get_target_columns(task_name, step_name)
-    return (
+    return [
         DataLoader(
             CustomDataset(
                 df,
@@ -266,7 +266,7 @@ def get_data_loaders(
             num_workers=0,
         )
         for df, batch_size, shuffle in zip(dfs, batch_sizes, shuffles)
-    )
+    ]
 
 
 def get_model_checkpoint_basename(

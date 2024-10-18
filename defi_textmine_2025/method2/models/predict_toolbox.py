@@ -1,5 +1,4 @@
 import logging
-import os
 from typing import Tuple
 import numpy as np
 import pandas as pd
@@ -10,9 +9,7 @@ from tqdm import tqdm
 
 from defi_textmine_2025.method2.models.model_custom_classes import BertBasedModel
 from defi_textmine_2025.method2.models.shared_toolbox import (
-    BASE_CHECKPOINT_NAME,
     get_data_loaders,
-    get_model_checkpoint_basename,
     get_model_checkpoint_path,
     init_model,
     load_model,
@@ -56,7 +53,7 @@ def get_predictions(
     return predictions, prediction_probs
 
 
-def load_pretrained_model(
+def load_trained_model(
     task_name: str,
     step_name: str,
     num_fold: int,
@@ -87,17 +84,19 @@ def apply_task_step_model(
     is_step_multilabel: bool = True,
 ) -> Tuple[np.ndarray]:
     input_data = task.filter_prediction_data(input_data)
+    assert not input_data.empty, f"No row matches entity types of {task=}!"
     logging.info(
         f"Task filtered data for prediction: {input_data.shape=}, {input_data.columns=}"
     )
     return get_predictions(
         model=trained_model,
         data_loader=get_data_loaders(
+            task.name,
             step_name,
-            dfs=(input_data),
-            batch_sizes=(batch_size),
-            shuffles=(False),
-        ),
+            dfs=[input_data],
+            batch_sizes=[batch_size],
+            shuffles=[False],
+        )[0],
         device=device,
         multilabel=is_step_multilabel,
     )
