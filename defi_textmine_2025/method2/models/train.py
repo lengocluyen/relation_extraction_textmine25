@@ -23,14 +23,16 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from defi_textmine_2025.method2.models.model_custom_classes import BertMlp
+from defi_textmine_2025.method2.models.model_custom_classes import (
+    BertMlp,
+    BertBasedModel,
+)
 from defi_textmine_2025.method2.models.task_definition import Task
 from defi_textmine_2025.data.utils import (
     compute_class_weights,
     get_cat_var_distribution,
 )
-from defi_textmine_2025.bert_dataset_and_models import (
-    BertBasedModel,
+from defi_textmine_2025.method2.models.train_toolbox import (
     eval_model,
     train_model,
 )
@@ -48,9 +50,9 @@ from defi_textmine_2025.method2.models.shared_toolbox import (
     get_data_loaders,
 )
 
-TRAIN_BATCH_SIZE = 32
+TRAIN_BATCH_SIZE = 16
 VAL_BATCH_SIZE = 96
-LEARNING_RATE = 2e-5
+LEARNING_RATE = 2e-7
 WEIGHT_DECAY = 0.01
 MAX_EPOCHS = 100
 PATIENCE = 30
@@ -84,7 +86,11 @@ if __name__ == "__main__":
     )
     logging.info(f"Task filtered data for train: {train_df.shape=}, {val_df.shape=}")
     train_data_loader, val_data_loader = get_data_loaders(
-        task_name, step_name, train_df, val_df, TRAIN_BATCH_SIZE, VAL_BATCH_SIZE
+        task_name,
+        step_name,
+        dfs=(train_df, val_df),
+        batch_sizes=(TRAIN_BATCH_SIZE, VAL_BATCH_SIZE),
+        shuffles=(True, False),
     )
     n_examples = train_df.shape[0]
     n_classes = (

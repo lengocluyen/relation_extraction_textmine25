@@ -13,8 +13,12 @@ class CustomDataset(torch.utils.data.Dataset):
         label_columns: list[str],
     ):
         self.tokenizer = tokenizer
-        self.texts = list(df[text_column])
-        self.targets = df[label_columns].values
+        self.texts = df[text_column].values.tolist()
+        self.targets = (
+            df[label_columns].values.tolist()
+            if all(label in df.columns for label in label_columns)
+            else None
+        )
         self.max_len = max_n_tokens
 
     def __len__(self):
@@ -38,5 +42,6 @@ class CustomDataset(torch.utils.data.Dataset):
             "input_ids": inputs["input_ids"].flatten(),
             "attention_mask": inputs["attention_mask"].flatten(),
             "token_type_ids": inputs["token_type_ids"].flatten(),
-            "targets": torch.FloatTensor(self.targets[index]),
-        }
+        } | (
+            {"targets": torch.FloatTensor(self.targets[index])} if self.targets else {}
+        )

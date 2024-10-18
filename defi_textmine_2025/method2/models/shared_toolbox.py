@@ -244,45 +244,29 @@ def get_target_columns(task_name: str, step_name: str) -> List[str]:
 def get_data_loaders(
     task_name: str,
     step_name: str,
-    train_df: pd.DataFrame,
-    val_df: pd.DataFrame,
-    train_batch_size: int,
-    val_batch_size: int,
-) -> Tuple[DataLoader, DataLoader]:
-    logging.warning("Init and tokenize the dataset")
+    dfs: Tuple[pd.DataFrame],
+    batch_sizes: Tuple[int],
+    shuffles: Tuple[bool],
+) -> Tuple[DataLoader]:
+    assert len(dfs) == len(batch_sizes)
+    assert len(dfs) == len(shuffles)
+    logging.warning(f"Init {len(dfs)} dataloaders...")
     target_columns = get_target_columns(task_name, step_name)
-    train_ds = CustomDataset(
-        train_df,
-        tokenizer,
-        max_n_tokens=MAX_N_TOKENS,
-        text_column=REDUCED_TAGGED_TEXT_COL,
-        label_columns=target_columns,
+    return (
+        DataLoader(
+            CustomDataset(
+                df,
+                tokenizer,
+                max_n_tokens=MAX_N_TOKENS,
+                text_column=REDUCED_TAGGED_TEXT_COL,
+                label_columns=target_columns,
+            ),
+            batch_size=batch_size,
+            shuffle=shuffle,
+            num_workers=0,
+        )
+        for df, batch_size, shuffle in zip(dfs, batch_sizes, shuffles)
     )
-    # logging.info(f"{train_ds=}")
-    val_ds = CustomDataset(
-        val_df,
-        tokenizer,
-        max_n_tokens=MAX_N_TOKENS,
-        text_column=REDUCED_TAGGED_TEXT_COL,
-        label_columns=target_columns,
-    )
-    # logging.info(f"{val_ds=}")
-    logging.warning("Init dataloaders")
-    # Data loaders
-    train_data_loader = DataLoader(
-        train_ds,
-        batch_size=train_batch_size,
-        shuffle=True,
-        num_workers=0,
-    )
-
-    val_data_loader = DataLoader(
-        val_ds,
-        batch_size=val_batch_size,
-        shuffle=False,
-        num_workers=0,
-    )
-    return train_data_loader, val_data_loader
 
 
 def get_model_checkpoint_basename(
@@ -337,9 +321,6 @@ def init_model(
 
 
 def load_model(
-    # task_name: str,
-    # num_fold: int,
-    # base_ckpt_name: str,
     checkpoint_path: str,
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
@@ -351,7 +332,8 @@ def load_model(
         checkpoint_path, weights_only=False, map_location=device
     )
     model.load_state_dict(checkpoint["model_state_dict"])
-    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    if optimizer:
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     last_epoch = checkpoint["last_epoch"]
     train_loop_history = checkpoint["train_loop_history"]
     best_val_f1_macro = checkpoint["best_val_f1_macro"]

@@ -27,11 +27,11 @@ class BertBasedModel(nn.Module):
     def forward(
         self,
         input_ids: torch.tensor,
-        attn_mask: torch.tensor,
+        attention_mask: torch.tensor,
         token_type_ids: torch.tensor,
     ) -> torch.tensor:
         output = self.embedding_model(
-            input_ids, attention_mask=attn_mask, token_type_ids=token_type_ids
+            input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids
         )
         output = self.head_model(output.pooler_output)
         return output

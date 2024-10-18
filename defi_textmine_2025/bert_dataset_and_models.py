@@ -6,6 +6,7 @@ import torch
 from torch import nn
 from sklearn.metrics import f1_score
 
+from torch.utils.data import DataLoader
 from transformers import (
     PreTrainedModel,
     PreTrainedTokenizer,
@@ -340,11 +341,11 @@ def loss_fn(
 
 # Training of the model for one epoch
 def train_model(
-    model,
-    training_loader,
-    optimizer,
-    _class_weights_tensor,
-    device,
+    model: nn.Module,
+    training_loader: DataLoader,
+    optimizer: torch.optim.Optimizer,
+    _class_weights_tensor: torch.Tensor,
+    device: torch.device,
     multilabel: bool = True,
 ):
     predictions = []
@@ -417,10 +418,10 @@ def train_model(
 
 
 def eval_model(
-    model,
-    validation_loader,
-    _class_weights_tensor,
-    device,
+    model: nn.Module,
+    validation_loader: DataLoader,
+    _class_weights_tensor: torch.Tensor,
+    device: torch.device,
     multilabel: bool = True,
 ):
     predictions = []
@@ -451,8 +452,8 @@ def eval_model(
             else:  # single-label
                 outputs = torch.softmax(outputs, dim=1).cpu().detach()  # probabilities
             # thresholding at 0.5
-            preds = outputs.round()  # 0 1 labels
-            targets = targets.cpu().detach()  # 0 1 labels
+            preds: torch.Tensor = outputs.round()  # 0 1 labels
+            targets: torch.Tensor = targets.cpu().detach()  # 0 1 labels
             correct_predictions += np.sum(preds.numpy() == targets.numpy())
             num_samples += (
                 targets.numpy().size
@@ -474,34 +475,39 @@ def eval_model(
     )
 
 
-def get_predictions(model, data_loader, device):
-    """
-    Outputs:
-      predictions -
-    """
+def get_predictions(
+    model: nn.Module,
+    data_loader: DataLoader,
+    device=torch.device,
+    multilabel: bool = True,
+):
     model = model.eval()
 
-    titles = []
+    texts = []
     predictions = []
     prediction_probs = []
     target_values = []
 
     with torch.no_grad():
         for data in tqdm(data_loader, "Prediction"):
-            title = data["title"]
+            text = data["text"]
             ids = data["input_ids"].to(device, dtype=torch.long)
             mask = data["attention_mask"].to(device, dtype=torch.long)
             token_type_ids = data["token_type_ids"].to(device, dtype=torch.long)
-            targets = data["targets"].to(device, dtype=torch.float)
+            targets: torch.Tensor = data["targets"].to(device, dtype=torch.float)
 
             outputs = model(ids, mask, token_type_ids)
             # add sigmoid, for the training sigmoid is in BCEWithLogitsLoss
-            outputs = torch.sigmoid(outputs).detach().cpu()
+            if multilabel:
+                # add sigmoid, for the training sigmoid is in BCEWithLogitsLoss
+                outputs = torch.sigmoid(outputs).cpu().detach()  # probabilities
+            else:  # single-label
+                outputs = torch.softmax(outputs, dim=1).cpu().detach()  # probabilities
             # thresholding at 0.5
             preds = outputs.round()
-            targets = targets.detach().cpu()
+            targets: torch.Tensor = targets.detach().cpu()
 
-            titles.extend(title)
+            texts.extend(text)
             predictions.extend(preds)
             prediction_probs.extend(outputs)
             target_values.extend(targets)
@@ -510,4 +516,4 @@ def get_predictions(model, data_loader, device):
     prediction_probs = torch.stack(prediction_probs)
     target_values = torch.stack(target_values)
 
-    return titles, predictions, prediction_probs, target_values
+    return texts, predictions, prediction_probs, target_values
