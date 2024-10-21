@@ -76,22 +76,21 @@ def load_trained_model(
 
 def apply_task_step_model(
     trained_model: BertBasedModel,
-    task: Task,
-    step_name: str,
     input_data: pd.DataFrame,
+    task_name: str,
+    step_name: str,
     batch_size: int,
     device: torch.device,
     is_step_multilabel: bool = True,
 ) -> Tuple[np.ndarray]:
-    input_data = task.filter_prediction_data(input_data)
-    assert not input_data.empty, f"No row matches entity types of {task=}!"
+    assert not input_data.empty, f"No row matches entity types of task {task_name}!"
     logging.info(
         f"Task filtered data for prediction: {input_data.shape=}, {input_data.columns=}"
     )
     return get_predictions(
         model=trained_model,
         data_loader=get_data_loaders(
-            task.name,
+            task_name,
             step_name,
             dfs=[input_data],
             batch_sizes=[batch_size],
