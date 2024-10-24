@@ -4,7 +4,9 @@ import os
 import pandas as pd
 
 
-def load_data(dir_or_file_path: str, index_col=None, sep=",") -> pd.DataFrame:
+def load_data(
+    dir_or_file_path: str, index_col=None, sep=",", ignore_index=False
+) -> pd.DataFrame:
     if os.path.isdir(dir_or_file_path):
         all_files = glob(os.path.join(dir_or_file_path, "*.csv")) + glob(
             os.path.join(dir_or_file_path, "*.parquet")
@@ -25,5 +27,5 @@ def load_data(dir_or_file_path: str, index_col=None, sep=",") -> pd.DataFrame:
             for filename in all_files
         ],
         axis=0,
-        ignore_index=True,
+        ignore_index=ignore_index,
     )

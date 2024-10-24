@@ -4,7 +4,6 @@ python -m defi_textmine_2025.method2.models.predict
 
 import logging
 import os
-from defi_textmine_2025.method2.data.loading import load_data
 from defi_textmine_2025.method2.data.relation_and_entity_classes import (
     RELATION_CLASSES,
     WITH_RELATION_CLASS,
@@ -17,10 +16,11 @@ from defi_textmine_2025.settings import (
     get_now_time_as_str,
 )
 from defi_textmine_2025.set_logging import config_logging
-from defi_textmine_2025.data.utils import save_data
 
 start_date_as_str = get_now_time_as_str()
 config_logging(f"{LOGGING_DIR}/method2/predict.log")
+from defi_textmine_2025.method2.data.loading import load_data
+from defi_textmine_2025.data.utils import save_data
 
 import pandas as pd
 import torch
@@ -38,6 +38,7 @@ from defi_textmine_2025.method2.models.shared_toolbox import (
     get_target_columns,
     load_fold_data,
     task2step2ismultilabel,
+    INPUT_COLUMNS,
 )
 
 BATCH_SIZE = 128
@@ -93,9 +94,10 @@ if __name__ == "__main__":
     predictions_dir = f"{OUTPUT_DIR}/method2-cv5/fold1"
     num_fold = 1  # int(sys.argv[1])
     # input_path = "data/defi-text-mine-2025/interim/reduced_text_w_entity_bracket/test"  # int(sys.argv[2])
-    input_path = "data/defi-text-mine-2025/interim/method2-5_fold_cv/validation-fold1-mth2.parquet"  # int(sys.argv[2])
-    data = load_data(input_path, index_col=0)  # .head(1000)
+    input_path = "data/defi-text-mine-2025/interim/method2-5_fold_cv/train-fold1-mth2.parquet"  # int(sys.argv[2])
+    data = load_data(input_path, index_col=0)[INPUT_COLUMNS]  # .head(100)
     logging.info(f"{data.shape=}")
+    logging.info(f"{data.columns=}")
     # pipelines = [
     #     [("roottask", "RI"), ("subtask1", "RC")],
     #     [("roottask", "RI"), ("subtask2", "RC")],
@@ -126,8 +128,10 @@ if __name__ == "__main__":
             save_data(
                 data,
                 f"{predictions_dir}/{os.path.basename(input_path)}_pred-before-filtering.csv",
-                with_index=False,
+                with_index=True,
             )
+        #     break
+        # break
 
 
 data = data[[col for col in data if not col.endswith("proba")]].fillna(0.0)
@@ -135,7 +139,9 @@ w_rel_data = data[data[WITH_RELATION_CLASS] == 1.0]
 no_rel_data = data[data[WITH_RELATION_CLASS] == 0]
 no_rel_data.loc[:, RELATION_CLASSES] = 0.0
 save_data(
-    pd.concat([w_rel_data, no_rel_data], axis=0),
+    pd.concat([w_rel_data, no_rel_data], axis=0, ignore_index=False)
+    .fillna(0)
+    .sort_index(),
     f"{predictions_dir}/{os.path.basename(input_path)}_pred-after-filtering.csv",
-    with_index=False,
+    with_index=True,
 )

@@ -14,7 +14,6 @@ from defi_textmine_2025.method2.models.shared_toolbox import (
     init_model,
     load_model,
 )
-from defi_textmine_2025.method2.models.task_definition import Task
 
 
 def get_predictions(

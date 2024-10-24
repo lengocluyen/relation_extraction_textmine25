@@ -26,7 +26,7 @@ from defi_textmine_2025.settings import RANDOM_SEED
 class Task:
     name: str
     relation_types: List[str]
-    entity_type_pairs: List[Tuple[str, str]]
+    entity_type_pairs: Set[Tuple[str, str]]
     relations_to_drop_in_train_data: Set[str]
     identical_entities: bool = field(default=False)
 
@@ -161,7 +161,7 @@ if __name__ == "__main__":
     logging.info(
         f"{train_df.shape=}, {val_df.shape=}, {labeled_df.shape=} {test_df.shape=}, {train_df.columns=}"
     )
-    name2task = {}
+    name2task: dict[str, Task] = {}
     for name, rel_types in SUBTASK_NAME2ORDEREDLABELS.items():
         subtask: Task = Task.init_predefined_sub_task(name, labeled_df)
         name2task[name] = subtask
